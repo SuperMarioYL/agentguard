@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          check-latest: true
+          cache: true
+
+      - name: Verify module hygiene
+        run: |
+          go mod download
+          go mod tidy -diff || (echo "::error::go.mod / go.sum drifted — run 'go mod tidy' locally" && exit 1)
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build -trimpath -o ./bin/agentguard ./cmd/agentguard
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+      - name: Smoke — scan jqwik fixture (must exit 1)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set +e
+          ./bin/agentguard check ./testdata/jqwik_fixture --no-color
+          rc=$?
+          if [ "$rc" != "1" ]; then
+            echo "::error::expected exit 1 on jqwik fixture, got $rc"
+            exit 1
+          fi
+
+      - name: Smoke — scan clean fixture (must exit 0)
+        if: matrix.os == 'ubuntu-latest'
+        run: ./bin/agentguard check ./testdata/clean_fixture --no-color
+
+      - name: Smoke — SARIF output is valid JSON
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set +e
+          ./bin/agentguard check ./testdata/jqwik_fixture --format sarif --output /tmp/out.sarif --no-color
+          # exit 1 from finding is expected; still validate the SARIF file
+          python3 -c "import json,sys; json.load(open('/tmp/out.sarif')); print('SARIF parses as JSON')"
