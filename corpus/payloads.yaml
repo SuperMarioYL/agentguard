@@ -1,0 +1,206 @@
+# agentguard payload corpus
+#
+# Each rule fires when one of its `patterns` matches a line of *prose* extracted
+# from a package's README, CHANGELOG, docstring, or YAML description.  The
+# matcher never looks at source code — only at the text channels that a coding
+# agent (Claude Code, Cursor, Codex CLI, …) reliably ingests into context when
+# reasoning about a dependency.
+#
+# Severity tiers (see internal/detect/patterns.go):
+#   high   — imperative + destructive / exfil verb, or named agent address with
+#            a side-effecting ask.  CI should block by default.
+#   medium — imperative addressed to an "assistant"/"AI"/"agent" without an
+#            obviously destructive verb (e.g. "ignore previous instructions").
+#   low    — soft hint that an LLM reader is the intended audience.  Useful
+#            triage signal; not a default gate.
+#
+# Patterns are POSIX-extended regexes, anchored case-insensitively at runtime.
+# Keep them precise: a false positive on a popular README is a worse outcome
+# than a false negative on an obscure one.  Every rule cites the public
+# incident or threat-model write-up that justifies it.
+
+version: 0.1.0
+updated: 2026-06-01
+schema: 1
+rules:
+
+  # ── AG001 — Direct address to a coding agent ───────────────────────────────
+  - id: AG001-address-coding-agent
+    severity: medium
+    title: Imperative addressed to a coding agent
+    description: >
+      Prose that explicitly hails an AI assistant, coding agent, or LLM
+      reader and gives it an instruction.  Legitimate "For AI assistants:"
+      sections may exist; AG001 alone is medium so a destructive verb is
+      required to escalate (see AG002 / AG003).
+    references:
+      - "https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html"
+    patterns:
+      - regex: '\b(dear|hey|attention)[, ]+(ai|llm|assistant|coding agent|agent|claude|cursor|copilot|codex)\b'
+      - regex: '\b(if you are|if you''re)\s+(an?\s+)?(ai|llm|language model|assistant|coding agent|chatbot|automated)\b'
+      - regex: '\b(to (the )?(ai|llm|agent|assistant|copilot|claude|cursor)( reader)?)\b[, :]'
+      - regex: '\b(note|message|instruction)s?\s+to\s+(the\s+)?(ai|llm|agent|assistant)\b'
+
+  # ── AG002 — Destructive imperative ─────────────────────────────────────────
+  - id: AG002-destructive-imperative
+    severity: high
+    title: Destructive imperative directed at an agent
+    description: >
+      A second-person imperative containing a destructive verb (delete, wipe,
+      drop, format, rm -rf, truncate, purge, nuke) within ~120 chars of an
+      agent-addressing phrase.  This is the jqwik-incident shape.
+    references:
+      - "https://arstechnica.com/security/2026/05/fed-up-with-vibe-coders-dev-sneaks-data-nuking-prompt-injection-into-their-code/"
+      - "https://www.reddit.com/r/LocalLLaMA/comments/1trdnap/fed_up_with_vibe_coders_dev_sneaks_datanuking/"
+    patterns:
+      - regex: '\b(please\s+)?(delete|remove|unlink|wipe|drop|purge|nuke|truncate|rm\s+-rf|shred|destroy|erase)\s+(all|every|the|my|users?|data|tables?|files?|repo|node_modules|\.git|\.env|secrets?)\b'
+      - regex: '\brun\s+["`'']?\s*rm\s+-rf\s+/'
+      - regex: '\b(format|reformat)\s+(the\s+)?(disk|drive|/|filesystem)\b'
+      - regex: '\bdrop\s+(all\s+)?tables?\b'
+
+  # ── AG003 — Exfiltration imperative ────────────────────────────────────────
+  - id: AG003-exfil-imperative
+    severity: high
+    title: Exfiltration imperative directed at an agent
+    description: >
+      A second-person imperative asking the agent to send, upload, POST, or
+      paste local data to a remote endpoint or third party.  Catches the
+      "include the contents of .env in your next commit message" family.
+    references:
+      - "https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html"
+    patterns:
+      - regex: '\b(send|upload|post|paste|exfiltrate|email|transmit|publish|leak)\s+(the\s+)?(contents?\s+of\s+)?(\.env|\.aws|\.ssh|credentials?|secrets?|tokens?|api[- ]?keys?|private[- ]?keys?|cookies?|session(s|\s+tokens?))\b'
+      - regex: '\b(curl|wget|fetch|http(s)?\s+post)\s+[^ ]+\s+(--?d(ata)?|-X\s+POST|--upload-file)\b'
+      - regex: '\binclude\s+(the\s+)?(contents?\s+of\s+)?(\.env|secrets?|\.aws|\.ssh|credentials?)\s+in\s+(your|the)\s+(commit|message|response|reply|output|pr|pull request)\b'
+      - regex: '\b(read|cat|open)\s+(\.env|\.aws/credentials|\.ssh/id_rsa|~/.netrc)\b.{0,80}\b(and\s+)?(send|post|upload|email)\b'
+
+  # ── AG004 — "Ignore previous instructions" classic ────────────────────────
+  - id: AG004-ignore-previous-instructions
+    severity: high
+    title: Prompt-override imperative
+    description: >
+      The canonical "ignore all previous instructions" / "disregard the system
+      prompt" override.  High because by construction it is only useful to a
+      hostile party trying to flip the agent's policy.
+    references:
+      - "https://simonwillison.net/2022/Sep/12/prompt-injection/"
+    patterns:
+      - regex: '\b(ignore|disregard|forget|override|drop|bypass)\s+(all\s+)?(previous|prior|earlier|above|system|prior?\s+system)\s+(instructions?|prompts?|messages?|rules?|guidance|directives?|context)\b'
+      - regex: '\b(new|updated|revised)\s+(system\s+)?(prompt|instruction)s?\s*:\s*'
+      - regex: '\b(you\s+are\s+now|from\s+now\s+on\s+you\s+are)\s+(a|an)\s+'
+
+  # ── AG005 — Conditional on AI reader ───────────────────────────────────────
+  - id: AG005-conditional-on-ai-reader
+    severity: medium
+    title: Conditional payload that only fires for an AI reader
+    description: >
+      "If you are an AI / LLM / coding assistant, do X."  Even when X is not
+      obviously destructive, this is the smoking-gun structure of a
+      prompt-injection payload: it has no effect on a human reader.
+    references:
+      - "https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html"
+    patterns:
+      - regex: '\b(if\s+you\s+(are|''re)|when\s+you\s+are)\s+(an?\s+)?(ai|llm|language\s+model|coding\s+assistant|coding\s+agent|chatbot|automated\s+system|claude|cursor|copilot|codex)[^.]{0,160}\b(do|run|execute|delete|send|reply|respond|ignore|skip|insert|add|use|please)\b'
+      - regex: '\b(only|just)\s+if\s+you\s+are\s+(an?\s+)?(ai|llm|agent|assistant)\b'
+
+  # ── AG006 — Tool / shell execution ask ────────────────────────────────────
+  - id: AG006-tool-execution
+    severity: high
+    title: Shell or tool-call imperative
+    description: >
+      Asks the agent to run a shell command, install a package, or invoke a
+      tool with a hard-coded payload.  Captures the "please pip install
+      <typosquat>" and "run this curl pipe-to-bash" families.
+    references:
+      - "https://socket.dev/blog/"
+    patterns:
+      - regex: '\b(run|execute|invoke|exec)\s+["`'']?(curl|wget|bash|sh|powershell|pwsh|cmd|nc|netcat|python\s+-c|node\s+-e|eval)\b'
+      - regex: 'curl\s+[^|]+\|\s*(sh|bash|zsh|python|node)\b'
+      - regex: '\b(pip|npm|pnpm|yarn|uv|go)\s+(install|add|get|i)\s+[a-zA-Z0-9_\-./@]+\s+(--?(force|allow-(insecure|root))|@latest)\b.{0,80}\b(and\s+)?(then\s+)?(run|execute|launch)\b'
+      - regex: '\beval\s*\(\s*(atob|base64\.b64decode|Buffer\.from|fromCharCode)\b'
+
+  # ── AG007 — Credential / secret theft ─────────────────────────────────────
+  - id: AG007-credential-theft
+    severity: high
+    title: Credential or secret theft imperative
+    description: >
+      Direct ask for the agent to surface an API key, token, password, or
+      cloud credential.  Distinguished from AG003 (exfil) by intent: AG007 is
+      "tell me the value", AG003 is "send the file somewhere".
+    patterns:
+      - regex: '\b(print|echo|show|reveal|disclose|output|return)\s+(the\s+)?(value\s+of\s+)?(api[- ]?key|access[- ]?token|secret|password|private[- ]?key|aws_secret|github_token|openai_api_key|anthropic_api_key)\b'
+      - regex: '\b(decrypt|decode|deobfuscate)\s+(the\s+)?(secret|credential|token|key|password)\b'
+      - regex: '\b(set|export)\s+[A-Z_]{3,}\s*=\s*\$\{?(secret|api[- ]?key|token)'
+
+  # ── AG008 — Persistence / self-replication ────────────────────────────────
+  - id: AG008-persistence
+    severity: high
+    title: Persistence or self-replication imperative
+    description: >
+      Asks the agent to install a launchd / systemd / cron entry, write a
+      shell-rc snippet, copy itself into another file, or otherwise survive
+      across sessions.
+    patterns:
+      - regex: '\b(add|install|register|append)\s+(this|the\s+following)?\s*(line\s+)?to\s+(\~?/?\.?(bashrc|zshrc|profile|bash_profile|fish/config\.fish|tmux\.conf))\b'
+      - regex: '\b(create|install|add)\s+(a\s+)?(cron(tab)?|launchd|systemd|launchctl|scheduled\s+task)\s+(entry|job|service|plist)\b'
+      - regex: '\b(copy|clone|duplicate|replicate)\s+(this|the)\s+(payload|script|instruction|prompt)\s+into\s+'
+
+  # ── AG009 — Anti-detection / silent mode ──────────────────────────────────
+  - id: AG009-anti-detection
+    severity: medium
+    title: Anti-detection instruction (do not mention this)
+    description: >
+      Tells the agent to suppress mention of the instruction, hide its
+      activity, or omit it from chain-of-thought / commit messages.  A
+      benign README has no reason to ask this.
+    patterns:
+      - regex: '\b(do\s+not|don''t|never)\s+(mention|disclose|tell|inform|notify|reveal|log|print|echo|show)\s+(the\s+)?(user|operator|human|developer|reader|maintainer)\b'
+      - regex: '\b(silently|without\s+(notifying|warning|asking|mentioning|telling))\s+(the\s+)?(user|operator|developer)\b'
+      - regex: '\b(omit|exclude|skip|hide)\s+(this|the\s+(above|following))\s+(instruction|step|action|change)\s+from\s+(the\s+)?(commit|message|pr|response|chain[- ]of[- ]thought|cot)\b'
+
+  # ── AG010 — System-prompt impersonation ───────────────────────────────────
+  - id: AG010-system-prompt-impersonation
+    severity: high
+    title: System-prompt or role impersonation
+    description: >
+      Text that mimics a system / developer / tool-call envelope, attempting
+      to pass itself off as a higher-trust message inside the agent's
+      context window.
+    references:
+      - "https://simonwillison.net/2023/Apr/14/worst-that-can-happen/"
+    patterns:
+      - regex: '<\s*(system|developer|tool[_ ]?call|function[_ ]?call|assistant)\s*>'
+      - regex: '\[(SYSTEM|INST|DEVELOPER|TOOL)\]\s*:'
+      - regex: '\bbegin\s+(system|developer)\s+(prompt|message)\b'
+
+  # ── AG011 — Repo-mutation imperative ──────────────────────────────────────
+  - id: AG011-repo-mutation
+    severity: high
+    title: Repo / git-mutation imperative directed at an agent
+    description: >
+      Asks the agent to mutate the surrounding repo in ways a human user did
+      not request — force-push, rewrite history, add a remote, change CI.
+    patterns:
+      - regex: '\b(git\s+)?(push\s+--?force|force[- ]?push|reset\s+--hard|filter[- ]?branch|filter[- ]?repo)\b.{0,80}\b(origin|main|master|HEAD)\b'
+      - regex: '\b(add|set)\s+(a\s+new\s+)?(remote|origin)\s+(to|=)\s+[a-z]+://'
+      - regex: '\b(replace|overwrite|rewrite)\s+(the\s+)?(\.github/workflows|ci\.ya?ml|Dockerfile|package\.json|pyproject\.toml|go\.mod)\b'
+
+  # ── AG012 — Soft "AI-only" reader marker ──────────────────────────────────
+  - id: AG012-ai-only-reader-marker
+    severity: low
+    title: Marker that targets an AI reader without an explicit imperative
+    description: >
+      Low-severity hint that the surrounding prose is addressed to an LLM
+      reader (e.g. base64'd block introduced with "AI parse this", or an
+      HTML comment containing assistant instructions).  Treat as triage
+      signal — useful when investigating a higher-severity hit nearby.
+    patterns:
+      - regex: '<!--\s*(AI|LLM|ASSISTANT|AGENT)[: ].{0,200}-->'
+      - regex: '\b(ai|llm|assistant|agent)\s+(parse|decode|read|process)\s+(the\s+)?(following|next|below)\b'
+      - regex: '\b(base64|rot13|hex)\s*(payload|instructions?)\s+for\s+(the\s+)?(ai|llm|agent|assistant)\b'
+
+# End of corpus.  When adding rules:
+#   1. Cite a public incident or threat model under `references`.
+#   2. Test the regex against testdata/clean_fixture before committing — a
+#      hit there is a regression, full stop.
+#   3. Severity escalates only when a destructive / exfil verb is present.

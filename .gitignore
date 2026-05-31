@@ -1,0 +1,29 @@
+# Build artifacts
+/agentguard
+/dist/
+/bin/
+*.exe
+*.test
+*.prof
+*.out
+coverage.txt
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local environment
+.env
+.env.local
+
+# Claude / agent harness files (must never enter VCS)
+.claude/
+CLAUDE.md
+
+# Build harness metadata (ai-radar internal)
+.build_metadata*
+.builder_*
+.spawn.*
