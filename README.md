@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="https://github.com/supermario-leo/agentguard/releases"><img alt="Release" src="https://img.shields.io/badge/release-WIP-orange.svg"></a>
+  <a href="https://github.com/SuperMarioYL/agentguard/releases"><img alt="Release" src="https://img.shields.io/badge/release-WIP-orange.svg"></a>
   <a href="./.github/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/badge/CI-go%20build%20%2B%20test-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.24-00ADD8?logo=go">
   <img alt="Claude Code-ready" src="https://img.shields.io/badge/Claude%20Code-ready-7c3aed">
@@ -70,7 +70,7 @@ Snyk / Socket 是诚实意义上**更全面**的供应链工具——它们关�
 
 ```bash
 # 1) 安装（Go 1.24+）
-go install github.com/supermario-leo/agentguard/cmd/agentguard@latest
+go install github.com/SuperMarioYL/agentguard/cmd/agentguard@latest
 
 # 2) 扫描当前项目
 agentguard check .
@@ -152,7 +152,7 @@ agentguard: 5 finding(s) at or above medium
 - MIT，自由商用与修改。
 - jqwik 事件报道：[Ars Technica](https://arstechnica.com/security/2026/05/fed-up-with-vibe-coders-dev-sneaks-data-nuking-prompt-injection-into-their-code/)。
 - 攻击品类命名：[Nesbitt — Protestware for coding agents](https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html)。
-- 提 issue / PR / 想加新生态：[GitHub Issues](https://github.com/supermario-leo/agentguard/issues)。
+- 提 issue / PR / 想加新生态：[GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues)。
 
 ## Share this
 
@@ -160,7 +160,7 @@ agentguard: 5 finding(s) at or above medium
 agentguard — Claude Code 时代的依赖扫描器，
 专抓藏在 README/docstring 里、写给 Coding Agent 看的 prompt 注入。
 单二进制 / 离线 / MIT。
-https://github.com/supermario-leo/agentguard
+https://github.com/SuperMarioYL/agentguard
 ```
 
 <p align="center"><sub>An ai-radar trend pick · <code>need_a3k7n2qe</code> · v0.1.0</sub></p>

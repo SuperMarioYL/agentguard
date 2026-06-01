@@ -8,14 +8,14 @@ import (
 
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
-	"github.com/supermario-leo/agentguard/internal/detect"
+	"github.com/SuperMarioYL/agentguard/internal/detect"
 )
 
 // sarifInformationURI is the canonical home for the scanner; it is
 // embedded in the SARIF run header so reviewers can click through to the
 // rule documentation.  When the repository moves, this is the single
 // pointer to update.
-const sarifInformationURI = "https://github.com/supermario-leo/agentguard"
+const sarifInformationURI = "https://github.com/SuperMarioYL/agentguard"
 
 // RenderSARIF emits a SARIF 2.1.0 report on w.  The schema is the one
 // GitHub Advanced Security and the VS Code SARIF Viewer accept; every

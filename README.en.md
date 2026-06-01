@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <a href="https://github.com/supermario-leo/agentguard/releases"><img alt="Release" src="https://img.shields.io/badge/release-WIP-orange.svg"></a>
+  <a href="https://github.com/SuperMarioYL/agentguard/releases"><img alt="Release" src="https://img.shields.io/badge/release-WIP-orange.svg"></a>
   <a href="./.github/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/badge/CI-go%20build%20%2B%20test-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.24-00ADD8?logo=go">
   <img alt="Claude Code-ready" src="https://img.shields.io/badge/Claude%20Code-ready-7c3aed">
@@ -70,7 +70,7 @@ Snyk and Socket are honestly the **broader** tools — they own executable-code 
 
 ```bash
 # 1) Install (requires Go 1.24+)
-go install github.com/supermario-leo/agentguard/cmd/agentguard@latest
+go install github.com/SuperMarioYL/agentguard/cmd/agentguard@latest
 
 # 2) Scan a project
 agentguard check .
@@ -157,7 +157,7 @@ Out-of-scope details live in §6 of the source `mvp_plan.md`.
 
 ## License + contributing
 
-MIT — free commercial use and modification. File bugs, false-positive samples, or new-ecosystem requests at [GitHub Issues](https://github.com/supermario-leo/agentguard/issues). PRs welcome; please run `go test ./...` and `go vet ./...` before opening one.
+MIT — free commercial use and modification. File bugs, false-positive samples, or new-ecosystem requests at [GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues). PRs welcome; please run `go test ./...` and `go vet ./...` before opening one.
 
 ## Share this
 
@@ -165,7 +165,7 @@ MIT — free commercial use and modification. File bugs, false-positive samples,
 agentguard — the dependency scanner built for the Coding Agent era.
 Catches prompt-injection payloads hidden in npm/pip/go package prose
 before Claude Code ever reads them.
-https://github.com/supermario-leo/agentguard
+https://github.com/SuperMarioYL/agentguard
 ```
 
 <p align="center"><sub>An ai-radar trend pick · <code>need_a3k7n2qe</code> · v0.1.0</sub></p>

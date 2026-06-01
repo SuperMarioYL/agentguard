@@ -1,4 +1,4 @@
-module github.com/supermario-leo/agentguard
+module github.com/SuperMarioYL/agentguard
 
 go 1.24
 

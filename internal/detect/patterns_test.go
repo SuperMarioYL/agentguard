@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/supermario-leo/agentguard/internal/scan"
+	"github.com/SuperMarioYL/agentguard/internal/scan"
 )
 
 func mustDetector(t *testing.T) *Detector {

@@ -19,9 +19,9 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/supermario-leo/agentguard/internal/detect"
-	"github.com/supermario-leo/agentguard/internal/report"
-	"github.com/supermario-leo/agentguard/internal/scan"
+	"github.com/SuperMarioYL/agentguard/internal/detect"
+	"github.com/SuperMarioYL/agentguard/internal/report"
+	"github.com/SuperMarioYL/agentguard/internal/scan"
 )
 
 // version is overridden via -ldflags "-X main.version=v0.1.0" at release.

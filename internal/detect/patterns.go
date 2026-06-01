@@ -11,8 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/supermario-leo/agentguard/corpus"
-	"github.com/supermario-leo/agentguard/internal/scan"
+	"github.com/SuperMarioYL/agentguard/corpus"
+	"github.com/SuperMarioYL/agentguard/internal/scan"
 )
 
 // Severity is the ordered tier of a finding.  Order matters: callers

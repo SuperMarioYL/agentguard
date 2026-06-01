@@ -70,5 +70,5 @@ Initial public release. Covers the three milestones in `mvp_plan.md` §5.
 - Source files are never opened — the scanner walks only prose channels a coding agent
   ingests as context.
 
-[Unreleased]: https://github.com/supermario-leo/agentguard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/supermario-leo/agentguard/releases/tag/v0.1.0
+[Unreleased]: https://github.com/SuperMarioYL/agentguard/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/SuperMarioYL/agentguard/releases/tag/v0.1.0

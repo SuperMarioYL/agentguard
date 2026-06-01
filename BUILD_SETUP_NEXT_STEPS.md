@@ -7,14 +7,14 @@ checklist — most steps are once-only.
 
 ```bash
 # from inside this directory
-git remote add origin git@github.com:supermario-leo/agentguard.git
+git remote add origin git@github.com:SuperMarioYL/agentguard.git
 git push -u origin main
 ```
 
 If the GitHub repo does not exist yet:
 
 ```bash
-gh repo create supermario-leo/agentguard --public --source=. --remote=origin --push
+gh repo create SuperMarioYL/agentguard --public --source=. --remote=origin --push
 ```
 
 ## 2. Set the discoverability topics
@@ -74,8 +74,8 @@ GitHub will pick up the tag and surface it under Releases. The README badge that
 `release-WIP` can be swapped to a live shields.io release badge:
 
 ```markdown
-<a href="https://github.com/supermario-leo/agentguard/releases/latest">
-  <img alt="Latest release" src="https://img.shields.io/github/v/release/supermario-leo/agentguard">
+<a href="https://github.com/SuperMarioYL/agentguard/releases/latest">
+  <img alt="Latest release" src="https://img.shields.io/github/v/release/SuperMarioYL/agentguard">
 </a>
 ```
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/supermario-leo/agentguard/internal/detect"
+	"github.com/SuperMarioYL/agentguard/internal/detect"
 )
 
 func init() {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/supermario-leo/agentguard/internal/detect"
+	"github.com/SuperMarioYL/agentguard/internal/detect"
 )
 
 // sarifShape models the slice of SARIF 2.1.0 the renderer is expected to
