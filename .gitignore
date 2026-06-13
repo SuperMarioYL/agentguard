@@ -23,7 +23,9 @@ coverage.txt
 .claude/
 CLAUDE.md
 
-# Build harness metadata (ai-radar internal)
+# build scaffolding (not part of the project)
 .build_metadata*
 .builder_*
 .spawn.*
+.stage_*
+BUILD_SETUP_NEXT_STEPS.md

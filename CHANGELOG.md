@@ -18,7 +18,7 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 ## [0.1.0] — 2026-06-01
 
-Initial public release. Covers the three milestones in `mvp_plan.md` §5.
+Initial public release. Covers the three milestones (m1–m3) in the README roadmap.
 
 ### Added
 
@@ -61,7 +61,6 @@ Initial public release. Covers the three milestones in `mvp_plan.md` §5.
   - GitHub Actions workflow at `.github/workflows/ci.yml` running `go vet`, `go build`,
     `go test` on Ubuntu and macOS for Go 1.24.
   - `assets/demo.tape` — VHS script that renders the canonical jqwik demo as a 30-second cast.
-  - `BUILD_SETUP_NEXT_STEPS.md` — checklist for pushing the repo public.
 
 ### Threat-model notes
 

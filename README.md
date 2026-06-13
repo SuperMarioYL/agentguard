@@ -145,7 +145,7 @@ agentguard: 5 finding(s) at or above medium
 - [ ] **v0.3** · 团队策略服务器（hosted corpus 更新 + 自定义 allowlist + SARIF → Jira）
 - [ ] 显式弃疗：内置 LLM 分类器、IDE 实时插件、自动 strip / 改 prose——这是另一种产品。
 
-完整边界见 [`mvp_plan.md`](../../workspace/projects/) 的 §6（out of scope）。
+完整的 out-of-scope 边界见上方[路线图](#路线图)末尾的「显式弃疗」一项。
 
 ## 致谢与许可证
 
@@ -162,5 +162,3 @@ agentguard — Claude Code 时代的依赖扫描器，
 单二进制 / 离线 / MIT。
 https://github.com/SuperMarioYL/agentguard
 ```
-
-<p align="center"><sub>An ai-radar trend pick · <code>need_a3k7n2qe</code> · v0.1.0</sub></p>

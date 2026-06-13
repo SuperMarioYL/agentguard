@@ -153,7 +153,7 @@ The `agentguard corpus` subcommand prints the embedded corpus version, rule coun
 - [ ] **v0.3** — Hosted team policy server (central corpus updates + per-org allowlists + SARIF → Jira).
 - [ ] Explicitly declined: built-in LLM classifier, IDE / MCP real-time hook, auto-strip of third-party prose — different product.
 
-Out-of-scope details live in §6 of the source `mvp_plan.md`.
+The full out-of-scope boundary is the "Explicitly declined" item at the end of the [Roadmap](#roadmap) above.
 
 ## License + contributing
 
@@ -167,5 +167,3 @@ Catches prompt-injection payloads hidden in npm/pip/go package prose
 before Claude Code ever reads them.
 https://github.com/SuperMarioYL/agentguard
 ```
-
-<p align="center"><sub>An ai-radar trend pick · <code>need_a3k7n2qe</code> · v0.1.0</sub></p>
