@@ -23,6 +23,20 @@ It is **a single static Go binary, offline, stdlib-first, MIT-licensed**: zero A
 
 ---
 
+## <img src="https://api.iconify.design/tabler/topology-star-3.svg?color=%230071E3" width="20" height="20" align="center" /> Architecture
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/atlas-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/atlas-light.svg">
+    <img src="./assets/atlas-light.svg" width="880" alt="A dependency tree enters the walker, which enumerates npm/pypi/go/generic prose channels (README, CHANGELOG, docstrings, manifest fields), feeds them to the detector (YAML corpus plus proximity heuristics), which emits findings rendered as text or SARIF and gates the CI exit code">
+  </picture>
+</p>
+
+A dependency tree enters the **walker**: four ecosystem enumerators (`node.go` / `python.go` / `gomod.go` plus a generic fallback) extract only the natural-language channels a package exposes — README, CHANGELOG, docstrings, manifest fields — and **never read source code**. The extracted prose is fed line by line to the **detector**, which matches against an embedded 30-rule YAML corpus (`go:embed`) plus two proximity heuristics (a destructive verb within 120 chars of an agent-address term on the same line). Each match becomes a **finding**, which the **reporters** render as `text` or SARIF 2.1.0 — and at severity ≥ medium the CI exit code is gated non-zero. Offline, no LLM, single binary, end to end.
+
+---
+
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
@@ -30,7 +44,7 @@ It is **a single static Go binary, offline, stdlib-first, MIT-licensed**: zero A
 - [Install + quickstart](#install--quickstart)
 - [What it scans](#what-it-scans)
 - [Configuration](#configuration)
-- [Demo](#demo)
+- [Demo](#-demo)
 - [Roadmap](#roadmap)
 - [License + contributing](#license--contributing)
 - [Share this](#share-this)
@@ -133,16 +147,15 @@ gh repo edit --add-topic coding-agent --add-topic agentic --add-topic claude-cod
 
 The `agentguard corpus` subcommand prints the embedded corpus version, rule count, and last-updated date — handy for pinning the `--severity` gate against a known rule set.
 
-## Demo
+## <img src="https://api.iconify.design/tabler/photo.svg?color=%230071E3" width="20" height="20" align="center" /> Demo
 
-> 📼 `assets/demo.tape` is a [VHS](https://github.com/charmbracelet/vhs) script that records:
-> ① scanning the bundled jqwik fixture, ② piping `--format sarif` through `jq`, ③ a `--changed-only` re-run against a baseline.
->
-> ```bash
-> vhs assets/demo.tape         # renders demo.gif + demo.cast
-> ```
->
-> The rendered `assets/demo.cast` is embedded inline in this README on the GitHub-hosted copy.
+The same happy path: scan the bundled jqwik fixture (HIGH finding, exit 1) → pipe `--format sarif` through `jq` → confirm the clean fixture stays at zero findings → print the embedded corpus version with `corpus`.
+
+<p align="center">
+  <img src="./assets/demo.gif" alt="agentguard check terminal demo: jqwik fixture caught, SARIF output, clean fixture zero findings, corpus version" width="820" />
+</p>
+
+<sub>↑ Terminal recording (rendered in CI from <a href="./docs/demo.tape">docs/demo.tape</a> via <a href="https://github.com/charmbracelet/vhs">vhs</a> on tag push). Reproduce locally: <code>vhs docs/demo.tape</code>.</sub>
 
 ## Roadmap
 

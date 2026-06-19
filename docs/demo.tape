@@ -1,15 +1,13 @@
-# agentguard — 30-second demo script for charmbracelet/vhs.
+# agentguard — terminal demo script for charmbracelet/vhs.
 #
-# Render with:   vhs assets/demo.tape
-# Outputs:       assets/demo.gif   (animated)
-#                assets/demo.cast  (asciinema cast — used by README embeds)
+# Render with:   vhs docs/demo.tape
+# Output:        assets/demo.gif
 #
-# Goal: show the jqwik fixture being caught, SARIF output piped through jq, and
-# the --changed-only incremental mode against a baseline lockfile.  Total target
-# duration is ~30 seconds so the cast embeds cleanly in a Show HN reply.
+# Happy path: scan the bundled jqwik fixture (HIGH finding, exit 1), pipe the
+# SARIF output through jq for GitHub code-scanning, confirm the clean fixture
+# stays at zero findings, then print the embedded corpus version.
 
 Output assets/demo.gif
-Output assets/demo.cast
 
 Set FontSize 16
 Set Width 1280
@@ -20,7 +18,7 @@ Set TypingSpeed 45ms
 Set PlaybackSpeed 1.0
 
 # ── Scene 1 — first scan catches the jqwik payload ─────────────────────────
-Type "# 1) scan the jqwik fixture — should fire a HIGH finding and exit 1"
+Type "# 1) scan the jqwik fixture — fires HIGH findings and exits 1"
 Enter
 Sleep 600ms
 Type "agentguard check ./testdata/jqwik_fixture"
@@ -46,16 +44,8 @@ Type "agentguard check ./testdata/clean_fixture"
 Enter
 Sleep 2s
 
-# ── Scene 4 — incremental --changed-only mode for CI ──────────────────────
-Type "# 4) --changed-only skips packages whose hash matches a baseline"
-Enter
-Sleep 600ms
-Type "agentguard check ./testdata/jqwik_fixture --changed-only baseline.json"
-Enter
-Sleep 3s
-
-# ── Scene 5 — corpus introspection ────────────────────────────────────────
-Type "# 5) which corpus version did we just run?"
+# ── Scene 4 — corpus introspection ────────────────────────────────────────
+Type "# 4) which corpus version did we just run?"
 Enter
 Sleep 400ms
 Type "agentguard corpus"

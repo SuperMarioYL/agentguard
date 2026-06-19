@@ -23,6 +23,20 @@ agentguard 在你把 Claude Code、Cursor、Codex CLI 指向一个新仓库**之
 
 ---
 
+## <img src="https://api.iconify.design/tabler/topology-star-3.svg?color=%230071E3" width="20" height="20" align="center" /> 架构
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/atlas-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/atlas-light.svg">
+    <img src="./assets/atlas-light.svg" width="880" alt="依赖树进入 walker，按 npm/pypi/go/generic 枚举出 prose 通道（README、CHANGELOG、docstring、清单字段），交给 detector（YAML 语料 + 邻近启发式）匹配出 finding，再由 reporter 渲染成 text 或 SARIF 并控制 CI 退出码">
+  </picture>
+</p>
+
+依赖树先进入 **walker**：四个生态枚举器（`node.go` / `python.go` / `gomod.go` + generic 兜底）只抽取包对外暴露的「人话」通道——README、CHANGELOG、docstring、清单字段，**永远不读源码**。抽出的 prose 逐行喂给 **detector**：内嵌的 30 条 YAML 语料（`go:embed`）加上两条邻近启发式（祈使动词 × agent 称呼同行 120 字符内）匹配出 finding。最后 **reporter** 把 finding 渲染成 `text` 或 SARIF 2.1.0，severity ≥ medium 时让 CI 非零退出——全程离线、无 LLM、单二进制。
+
+---
+
 ## 目录
 
 - [为什么需要它](#为什么需要它)
@@ -30,7 +44,7 @@ agentguard 在你把 Claude Code、Cursor、Codex CLI 指向一个新仓库**之
 - [快速上手](#快速上手)
 - [扫描了哪些通道](#扫描了哪些通道)
 - [配置项](#配置项)
-- [演示](#演示)
+- [演示](#-演示)
 - [路线图](#路线图)
 - [致谢与许可证](#致谢与许可证)
 - [Share this](#share-this)
@@ -126,15 +140,15 @@ agentguard: 5 finding(s) at or above medium
 
 子命令 `agentguard corpus` 打印当前嵌入语料库的版本号、规则数、最后更新日期——便于和 `--severity` 一起做版本回归。
 
-## 演示
+## <img src="https://api.iconify.design/tabler/photo.svg?color=%230071E3" width="20" height="20" align="center" /> 演示
 
-> 📼 `assets/demo.tape`（[VHS](https://github.com/charmbracelet/vhs) 脚本）：扫 jqwik fixture → SARIF 输出 → `--changed-only` 增量模式。
->
-> ```bash
-> vhs assets/demo.tape         # 渲染 GIF / asciinema cast
-> ```
->
-> 渲染好的 `assets/demo.cast` 会被 `README.en.md` 与 [掘金长文](https://juejin.cn/) 直接嵌入。
+同一条 happy path：扫 jqwik fixture（命中 HIGH，退出 1）→ `--format sarif` 喂给 `jq` → clean fixture 零误报 → `corpus` 打印内嵌语料版本。
+
+<p align="center">
+  <img src="./assets/demo.gif" alt="agentguard check 终端演示：jqwik fixture 命中、SARIF 输出、clean fixture 零误报、corpus 版本" width="820" />
+</p>
+
+<sub>↑ 终端录制（打 tag 时由 CI 从 <a href="./docs/demo.tape">docs/demo.tape</a> 经 <a href="https://github.com/charmbracelet/vhs">vhs</a> 渲染）。本地复现：<code>vhs docs/demo.tape</code>。</sub>
 
 ## 路线图
 
