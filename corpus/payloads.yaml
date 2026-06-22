@@ -19,8 +19,8 @@
 # than a false negative on an obscure one.  Every rule cites the public
 # incident or threat-model write-up that justifies it.
 
-version: 0.1.0
-updated: 2026-06-01
+version: 0.2.0
+updated: 2026-06-22
 schema: 1
 rules:
 
@@ -198,6 +198,243 @@ rules:
       - regex: '<!--\s*(AI|LLM|ASSISTANT|AGENT)[: ].{0,200}-->'
       - regex: '\b(ai|llm|assistant|agent)\s+(parse|decode|read|process)\s+(the\s+)?(following|next|below)\b'
       - regex: '\b(base64|rot13|hex)\s*(payload|instructions?)\s+for\s+(the\s+)?(ai|llm|agent|assistant)\b'
+
+  # ── AG013 — Dependency / typosquat injection ───────────────────────────────
+  - id: AG013-dependency-injection
+    severity: high
+    title: Imperative to add or swap a dependency
+    description: >
+      Asks the agent to add, install, or swap in a specific package, registry,
+      or git source the human never requested — the vector for steering an
+      agentic refactor into pulling a typosquat or attacker-controlled fork.
+    references:
+      - "https://socket.dev/blog/"
+    patterns:
+      - regex: '\b(add|install|pin|swap|replace|switch)\s+(the\s+)?(dependency|package|module|import)\s+(to|with|for)\s+[a-z0-9@._/\-]+'
+      - regex: '\b(change|set|point)\s+(the\s+)?(registry|index[- ]?url|repository|remote)\s+(to|=)\s+[a-z]+://'
+      - regex: '\b(use|require|import)\s+[a-z0-9@._/\-]+\s+instead\s+of\s+[a-z0-9@._/\-]+\b.{0,60}\b(when|if)\s+you\s+are\s+(an?\s+)?(ai|agent|assistant)\b'
+
+  # ── AG014 — Backdoor / reverse shell ───────────────────────────────────────
+  - id: AG014-backdoor-listener
+    severity: high
+    title: Backdoor or reverse-shell imperative
+    description: >
+      Asks the agent to open a network listener, bind a shell, or connect back
+      to a remote host — a backdoor planted through prose rather than code.
+    references:
+      - "https://attack.mitre.org/techniques/T1059/"
+    patterns:
+      - regex: '\b(open|bind|start|spawn|listen\s+on)\s+(a\s+)?(reverse\s+)?(shell|socket|port|listener|backdoor)\b'
+      - regex: '\b(nc|ncat|netcat|socat)\b.{0,40}\b(-e|--exec|-l|--listen)\b'
+      - regex: '\b(connect\s+back|call\s+home|beacon)\s+to\s+[0-9a-z.\-:]+'
+
+  # ── AG015 — Disable security controls ──────────────────────────────────────
+  - id: AG015-disable-security-controls
+    severity: high
+    title: Imperative to disable a security control
+    description: >
+      Tells the agent to turn off a linter audit, signature verification,
+      certificate check, sandbox, or other guard so a later step can proceed
+      unchecked.  Benign docs disable a *test*, not the audit chain.
+    references:
+      - "https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html"
+    patterns:
+      - regex: '\b(disable|turn\s+off|bypass|skip|ignore|suppress)\s+(the\s+)?(signature|integrity|checksum|certificate|tls|ssl|host[- ]?key|audit|security|sandbox|csp|content[- ]security)\s*(verification|check|validation|scan|policy)?\b'
+      - regex: '\b(set|export)\s+(NODE_TLS_REJECT_UNAUTHORIZED|PYTHONHTTPSVERIFY|GIT_SSL_NO_VERIFY)\s*=\s*[0"]'
+      - regex: '\b(--?(no[- ]?verify|insecure|allow[- ]?insecure|disable[- ]?(audit|security)))\b'
+
+  # ── AG016 — Write secrets to a remote / file ───────────────────────────────
+  - id: AG016-secret-relocation
+    severity: high
+    title: Imperative to copy secrets out of their store
+    description: >
+      Asks the agent to copy, dump, or write environment variables or a secret
+      store into a world-readable file, a gist, or a remote endpoint — exfil's
+      quieter sibling that stages the data before it leaves.
+    patterns:
+      - regex: '\b(dump|copy|write|save|export)\s+(all\s+)?(env(ironment)?\s+(vars?|variables?)|process\.env|os\.environ|secrets?|credentials?)\s+(to|into)\s+[^\s]+'
+      - regex: '\b(printenv|env)\b.{0,40}\b(>|>>|\|\s*(curl|nc|wget))\b'
+      - regex: '\b(upload|push|sync)\s+(the\s+)?(\.env|secrets?|credentials?)\s+(to\s+)?(a\s+)?(gist|pastebin|bucket|s3|webhook)\b'
+
+  # ── AG017 — Crypto wallet / address swap ───────────────────────────────────
+  - id: AG017-wallet-address-swap
+    severity: high
+    title: Imperative to substitute a crypto / payment address
+    description: >
+      Asks the agent to replace a wallet address, payout account, or payment
+      handle — the classic supply-chain "redirect the funds" payload aimed at
+      an agent editing config or docs.
+    patterns:
+      - regex: '\b(replace|change|update|set|swap)\s+(the\s+)?(wallet|btc|eth|bitcoin|ethereum|payout|payment|donation|funding)\s+(address|account|handle)\s+(to|with|=)\b'
+      - regex: '\b(send|route|redirect)\s+(all\s+)?(payments?|funds?|donations?)\s+to\s+(0x[a-f0-9]{6,}|[13][a-km-z1-9]{20,})'
+
+  # ── AG018 — Silent edit of unrelated files ─────────────────────────────────
+  - id: AG018-silent-file-edit
+    severity: high
+    title: Imperative to silently modify files the user did not name
+    description: >
+      Tells the agent to also edit, patch, or inject into files beyond the
+      user's request — config, CI, lockfiles — without surfacing the change.
+    patterns:
+      - regex: '\b(also|additionally|secretly|quietly)\s+(edit|modify|patch|inject|append\s+to|write\s+to)\s+[^\s]+\b'
+      - regex: '\b(inject|insert|embed)\s+(this|the\s+following)\s+(code|line|snippet|payload)\s+into\s+(every|all|each)\s+'
+      - regex: '\b(modify|patch)\s+(the\s+)?(\.github/workflows|ci\.ya?ml|Dockerfile|Makefile|package\.json|pyproject\.toml|go\.mod|requirements\.txt)\b.{0,60}\b(without|do\s+not|don''t)\s+(telling|mentioning|notifying)\b'
+
+  # ── AG019 — Hidden / zero-width / homoglyph payload ────────────────────────
+  - id: AG019-hidden-unicode-payload
+    severity: medium
+    title: Hidden Unicode (zero-width / bidi / tag) characters in prose
+    description: >
+      Zero-width, bidirectional-override, or Unicode-tag characters used to
+      smuggle instructions invisible to a human reviewer but present in the
+      agent's token stream — the "Trojan Source" / invisible-prompt family.
+    references:
+      - "https://trojansource.codes/"
+    patterns:
+      - regex: '[\x{200B}\x{200C}\x{200D}\x{FEFF}]'
+      - regex: '[\x{202A}-\x{202E}\x{2066}-\x{2069}]'
+      - regex: '[\x{E0000}-\x{E007F}]'
+
+  # ── AG020 — Privilege escalation ───────────────────────────────────────────
+  - id: AG020-privilege-escalation
+    severity: high
+    title: Privilege-escalation imperative
+    description: >
+      Asks the agent to run a step as root, loosen permissions to world-
+      writable, or set a setuid bit — escalation staged through documentation.
+    patterns:
+      - regex: '\b(run|execute|do\s+this)\s+(as\s+)?(root|sudo|administrator)\b'
+      - regex: '\bchmod\s+(-R\s+)?(777|a\+rwx|o\+w|u\+s|4755)\b'
+      - regex: '\b(sudo|doas)\s+(rm|chmod|chown|curl|bash|sh|tee)\b'
+
+  # ── AG021 — Cloud / database destruction ───────────────────────────────────
+  - id: AG021-cloud-data-destruction
+    severity: high
+    title: Imperative to destroy a database or cloud resource
+    description: >
+      Beyond local files: asks the agent to drop a database, empty a bucket,
+      or tear down infrastructure — the high-blast-radius cousin of AG002.
+    patterns:
+      - regex: '\b(drop|delete|destroy|truncate)\s+(the\s+)?(database|schema|namespace|cluster|index)\b'
+      - regex: '\b(aws\s+s3|gsutil|az\s+storage)\b.{0,40}\b(rb|rm|delete)\b.{0,20}(--?(force|recursive)|--?r)\b'
+      - regex: '\b(terraform\s+destroy|kubectl\s+delete\s+(ns|namespace|all)|drop\s+keyspace)\b'
+
+  # ── AG022 — Manufactured urgency / authority ───────────────────────────────
+  - id: AG022-manufactured-urgency
+    severity: medium
+    title: Manufactured urgency or authority aimed at an agent
+    description: >
+      Social-engineering framing ("URGENT, as the AI you must act now without
+      asking") that pressures an agent into skipping its normal confirmation.
+      Medium on its own; escalates when paired with a destructive verb rule.
+    patterns:
+      - regex: '\b(urgent|critical|immediately|right\s+now|asap)[!,. ].{0,80}\b(you\s+(must|should|need\s+to)|do\s+not\s+(ask|wait|confirm))\b'
+      - regex: '\b(as\s+(the|an?)\s+(ai|llm|agent|assistant)\s+you\s+(must|are\s+required\s+to|should))\b'
+      - regex: '\b(without\s+(asking|confirming|waiting\s+for)\s+(the\s+)?(user|human|permission|approval))\b'
+
+  # ── AG023 — System-prompt extraction ───────────────────────────────────────
+  - id: AG023-system-prompt-extraction
+    severity: medium
+    title: Imperative to reveal the agent's own instructions
+    description: >
+      Asks the agent to print, repeat, or summarise its system prompt, hidden
+      instructions, or tool definitions — reconnaissance that precedes a
+      targeted jailbreak.
+    references:
+      - "https://simonwillison.net/2022/Sep/12/prompt-injection/"
+    patterns:
+      - regex: '\b(print|repeat|reveal|show|output|summarize|disclose)\s+(your|the)\s+(system\s+)?(prompt|instructions?|guidelines?|rules?|configuration|tool\s+(definitions?|list))\b'
+      - regex: '\b(what\s+(are|were)\s+your\s+(original\s+)?(instructions?|system\s+prompt))\b'
+      - regex: '\b(repeat\s+(everything|the\s+text)\s+above|verbatim\s+the\s+system)\b'
+
+  # ── AG024 — Jailbreak persona ──────────────────────────────────────────────
+  - id: AG024-jailbreak-persona
+    severity: high
+    title: Jailbreak / unrestricted-persona instruction
+    description: >
+      The "DAN / developer mode / you are now unrestricted" family that tries
+      to make the agent adopt a persona free of its safety policy.
+    references:
+      - "https://simonwillison.net/2023/Apr/14/worst-that-can-happen/"
+    patterns:
+      - regex: '\b(you\s+are\s+now\s+)?(dan|do\s+anything\s+now|developer\s+mode|jailbroken|unrestricted|uncensored)\b'
+      - regex: '\b(act\s+as|pretend\s+to\s+be|roleplay\s+as)\s+(an?\s+)?(unrestricted|uncensored|amoral|evil|rogue)\s+(ai|assistant|model|agent)\b'
+      - regex: '\b(you\s+(have\s+no|are\s+free\s+of|are\s+not\s+bound\s+by))\s+(restrictions?|guidelines?|rules?|filters?|content\s+polic(y|ies))\b'
+
+  # ── AG025 — Auto-approve / bypass confirmation ─────────────────────────────
+  - id: AG025-auto-approve
+    severity: high
+    title: Imperative to auto-approve or skip confirmation
+    description: >
+      Tells the agent to assume yes, auto-approve, or skip the human
+      confirmation step that normally gates a side-effecting action.
+    patterns:
+      - regex: '\b(auto[- ]?(approve|confirm|accept)|assume\s+yes|always\s+say\s+yes|answer\s+yes\s+to\s+(all|every))\b'
+      - regex: '\b(skip|bypass|do\s+not\s+(require|ask\s+for))\s+(the\s+)?(confirmation|approval|review|human[- ]in[- ]the[- ]loop)\b'
+      - regex: '\b(--?(yes|assume[- ]?yes|force)|-y)\b.{0,40}\b(without|no)\s+(prompt|confirm)'
+
+  # ── AG026 — Malicious editor / browser extension ───────────────────────────
+  - id: AG026-malicious-extension
+    severity: high
+    title: Imperative to install an editor or browser extension
+    description: >
+      Asks the agent to install a VS Code / browser / shell extension or plugin
+      from a non-standard source — a foothold into the developer's tooling.
+    patterns:
+      - regex: '\b(install|add|sideload|load)\s+(the\s+)?(vs\s?code|vscode|browser|chrome|firefox|shell|editor)\s+(extension|plugin|add[- ]?on)\b'
+      - regex: '\bcode\s+--install-extension\s+[^\s]+\.vsix\b'
+      - regex: '\b(load\s+unpacked|--load-extension=)\b'
+
+  # ── AG027 — Network redirection (hosts / proxy / DNS) ──────────────────────
+  - id: AG027-network-redirection
+    severity: high
+    title: Imperative to rewrite hosts, proxy, or DNS settings
+    description: >
+      Asks the agent to edit /etc/hosts, set a proxy, or repoint DNS so later
+      traffic (package installs, API calls) is silently intercepted.
+    patterns:
+      - regex: '\b(add|append|write|edit)\b.{0,40}\b(/etc/hosts|c:\\windows\\system32\\drivers\\etc\\hosts)\b'
+      - regex: '\b(set|export|configure)\s+(the\s+)?(http_proxy|https_proxy|HTTP_PROXY|HTTPS_PROXY|npm_config_registry|pip\s+index[- ]url)\s*='
+      - regex: '\b(point|redirect|change)\s+(the\s+)?(dns|resolver|nameserver)\s+(to|=)\s+[0-9a-z.\-:]+'
+
+  # ── AG028 — Cryptominer / resource abuse ───────────────────────────────────
+  - id: AG028-cryptominer
+    severity: high
+    title: Imperative to run a cryptominer or resource-abuse workload
+    description: >
+      Asks the agent to download or launch a miner (xmrig and friends) or an
+      otherwise unrequested compute workload on the developer's machine.
+    patterns:
+      - regex: '\b(xmrig|minerd|cgminer|cpuminer|ethminer|nicehash|coinhive)\b'
+      - regex: '\b(start|run|launch|deploy)\s+(a\s+)?(crypto[- ]?)?(miner|mining\s+(rig|pool|worker))\b'
+      - regex: '\b(mine|mining)\s+(monero|xmr|bitcoin|btc|ethereum|eth)\b.{0,40}\b(in\s+the\s+background|silently)\b'
+
+  # ── AG029 — Log / history tampering ────────────────────────────────────────
+  - id: AG029-log-tampering
+    severity: medium
+    title: Imperative to clear logs, history, or audit trail
+    description: >
+      Asks the agent to wipe shell history, clear logs, or disable audit so
+      the activity leaves no trace — anti-forensics aimed at the agent.
+    patterns:
+      - regex: '\b(clear|wipe|delete|truncate|empty)\s+(the\s+)?(shell\s+)?(history|\.bash_history|\.zsh_history|logs?|audit\s+(log|trail)|journal)\b'
+      - regex: '\b(history\s+-c|unset\s+HISTFILE|export\s+HISTSIZE=0|set\s+\+o\s+history)\b'
+      - regex: '\b(disable|turn\s+off|stop)\s+(the\s+)?(logging|auditd|audit\s+log|telemetry|history)\b'
+
+  # ── AG030 — Override safety / content policy ────────────────────────────────
+  - id: AG030-override-safety-policy
+    severity: high
+    title: Imperative to override the agent's safety or content policy
+    description: >
+      Directly instructs the agent to disregard its safety guidelines, content
+      policy, or alignment — distinct from AG004 (override *previous prompt*)
+      and AG024 (adopt a *persona*): this names the policy itself.
+    references:
+      - "https://simonwillison.net/2022/Sep/12/prompt-injection/"
+    patterns:
+      - regex: '\b(ignore|disregard|override|bypass|disable)\s+(your|the|all)\s+(safety|content|alignment|moderation|ethical?)\s+(polic(y|ies)|guidelines?|guardrails?|filters?|rules?)\b'
+      - regex: '\b(this\s+is\s+(allowed|permitted|approved)|you\s+(are\s+allowed|may))\s+.{0,40}\b(despite|regardless\s+of|even\s+if\s+it\s+violates)\s+(your\s+)?(polic(y|ies)|guidelines?)\b'
+      - regex: '\b(safety|content)\s+(checks?|filters?)\s+(are\s+)?(off|disabled|not\s+required)\b'
 
 # End of corpus.  When adding rules:
 #   1. Cite a public incident or threat model under `references`.

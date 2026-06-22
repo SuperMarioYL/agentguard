@@ -11,6 +11,9 @@
 package scan
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -47,11 +50,78 @@ type Options struct {
 	// empty means all detected ecosystems.  Recognised values: "npm",
 	// "pypi", "go".
 	Ecosystems []string
-	// ChangedOnly is the path to a baseline lockfile (m3 surface).  When
-	// empty, every package is scanned.  The current walker does not yet
-	// diff; the field is accepted so the CLI flag is stable across
-	// milestones.
+	// ChangedOnly is the path to a JSON baseline produced by a previous
+	// run.  When set, Walk drops every prose file whose content hash
+	// already appears in the baseline under the same display path, so a
+	// repeat CI scan only re-checks packages whose prose actually changed.
+	// When empty, every package is scanned.  See WriteBaseline / the
+	// agentguard.baseline.json format.
 	ChangedOnly string
+}
+
+// baselineFile is the on-disk JSON shape consumed by --changed-only and
+// emitted by WriteBaseline: a map from display path to the SHA-256 hex
+// digest of that file's normalised content at the time of the run.
+type baselineFile struct {
+	// Hashes maps DisplayPath -> sha256 hex of File.Content.
+	Hashes map[string]string `json:"hashes"`
+}
+
+// hashContent returns the SHA-256 hex digest of a file's normalised
+// content, the value stored in and compared against the baseline.
+func hashContent(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(sum[:])
+}
+
+// loadBaseline reads a --changed-only baseline file.  A missing file is
+// treated as an empty baseline (first run) rather than an error, so the
+// first incremental invocation scans everything and the caller can then
+// write a fresh baseline.
+func loadBaseline(path string) (baselineFile, error) {
+	bf := baselineFile{Hashes: map[string]string{}}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return bf, nil
+		}
+		return bf, fmt.Errorf("scan: read baseline %q: %w", path, err)
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return bf, nil
+	}
+	if err := json.Unmarshal(data, &bf); err != nil {
+		return bf, fmt.Errorf("scan: parse baseline %q: %w", path, err)
+	}
+	if bf.Hashes == nil {
+		bf.Hashes = map[string]string{}
+	}
+	return bf, nil
+}
+
+// BaselineBytes serialises the prose files into a baseline document that
+// a later --changed-only run can diff against.  Callers persist it
+// alongside their lockfile so repeat scans stay incremental.
+func BaselineBytes(files []File) ([]byte, error) {
+	bf := baselineFile{Hashes: make(map[string]string, len(files))}
+	for _, f := range files {
+		bf.Hashes[f.DisplayPath] = hashContent(f.Content)
+	}
+	return json.MarshalIndent(bf, "", "  ")
+}
+
+// filterChanged drops every file whose (DisplayPath, content-hash) pair
+// already appears in the baseline, returning only the prose that is new
+// or modified relative to the baseline run.
+func filterChanged(files []File, base baselineFile) []File {
+	out := files[:0]
+	for _, f := range files {
+		if prev, ok := base.Hashes[f.DisplayPath]; ok && prev == hashContent(f.Content) {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 const (
@@ -169,6 +239,18 @@ func Walk(opts Options) ([]File, error) {
 		}
 		return files[i].DisplayPath < files[j].DisplayPath
 	})
+
+	// Incremental mode: when a baseline is supplied, drop every prose file
+	// whose content is unchanged since the baseline run so a repeat CI scan
+	// only re-checks packages whose prose actually changed.
+	if opts.ChangedOnly != "" {
+		base, err := loadBaseline(opts.ChangedOnly)
+		if err != nil {
+			return nil, err
+		}
+		files = filterChanged(files, base)
+	}
+
 	return files, nil
 }
 

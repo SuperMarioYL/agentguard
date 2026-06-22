@@ -28,12 +28,13 @@ import (
 var version = "dev"
 
 type checkOptions struct {
-	format       string
-	severityMin  string
-	changedOnly  string
-	output       string
-	noColor      bool
-	ecosystems   []string
+	format        string
+	severityMin   string
+	changedOnly   string
+	writeBaseline string
+	output        string
+	noColor       bool
+	ecosystems    []string
 	exitOnFinding bool
 }
 
@@ -88,7 +89,9 @@ func newCheckCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.severityMin, "severity", "s", opts.severityMin,
 		"minimum severity to report and to gate the exit code: low | medium | high")
 	cmd.Flags().StringVar(&opts.changedOnly, "changed-only", "",
-		"path to a baseline lockfile (JSON); skip packages whose hash matches")
+		"path to a baseline JSON (from --write-baseline); skip prose files whose content hash is unchanged")
+	cmd.Flags().StringVar(&opts.writeBaseline, "write-baseline", "",
+		"after scanning, write a baseline JSON of all scanned prose hashes to this path (for a later --changed-only run)")
 	cmd.Flags().StringVarP(&opts.output, "output", "o", "",
 		"write the report to this file (default: stdout)")
 	cmd.Flags().BoolVar(&opts.noColor, "no-color", false,
@@ -141,6 +144,16 @@ func runCheck(stdout, stderr io.Writer, root string, opts *checkOptions) error {
 	files, err := scan.Walk(scanOpts)
 	if err != nil {
 		return fmt.Errorf("walk %q: %w", root, err)
+	}
+
+	if opts.writeBaseline != "" {
+		data, err := scan.BaselineBytes(files)
+		if err != nil {
+			return fmt.Errorf("baseline: %w", err)
+		}
+		if err := os.WriteFile(opts.writeBaseline, data, 0o644); err != nil {
+			return fmt.Errorf("write baseline %q: %w", opts.writeBaseline, err)
+		}
 	}
 
 	findings, err := detector.ScanAll(files)

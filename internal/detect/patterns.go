@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 
@@ -202,11 +203,26 @@ func newFromBytes(data []byte) (*Detector, error) {
 	}, nil
 }
 
+// maxScanLineBytes caps a single prose line fed to the rule engine.  A
+// line longer than this is overwhelmingly machine-generated (minified
+// JSON, a base64 blob) rather than the natural-language threat surface
+// this scanner exists to catch, so the over-long remainder is dropped on
+// a rune boundary and scanning continues — a single pathological line
+// must never abort the whole scan and discard already-collected findings.
+const maxScanLineBytes = 1 << 20
+
 // ScanAll applies every rule and heuristic to every file's prose
 // content and returns the matched findings.  A line that triggers
 // multiple rules emits multiple findings; the (file, line, rule) tuple
 // is deduplicated so the same rule does not appear twice for the same
 // line even when several of its patterns match.
+//
+// ScanAll is best-effort: a line longer than the scanner buffer (e.g. a
+// >1 MiB minified blob) is rune-safely truncated rather than treated as
+// a hard error, so one bad line cannot abort the scan or discard the
+// findings already accumulated from other files.  The returned error is
+// reserved for genuinely unrecoverable failures; today there are none,
+// but the signature is kept stable for callers.
 func (d *Detector) ScanAll(files []scan.File) ([]Finding, error) {
 	var findings []Finding
 	seen := make(map[string]struct{})
@@ -216,7 +232,12 @@ func (d *Detector) ScanAll(files []scan.File) ([]Finding, error) {
 			continue
 		}
 		scanner := bufio.NewScanner(strings.NewReader(file.Content))
-		scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+		scanner.Buffer(make([]byte, 0, 64*1024), maxScanLineBytes)
+		// On an over-long token bufio.Scanner stops early; recover the
+		// dropped lines by re-splitting them ourselves so the remainder of
+		// the file is still scanned.  splitLongTolerant truncates any
+		// single line longer than the buffer instead of erroring out.
+		scanner.Split(splitLongTolerant)
 		lineNo := 0
 		for scanner.Scan() {
 			lineNo++
@@ -270,10 +291,70 @@ func (d *Detector) ScanAll(files []scan.File) ([]Finding, error) {
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			return findings, fmt.Errorf("scan %s: %w", file.DisplayPath, err)
+			// With splitLongTolerant in place bufio.ErrTooLong can no longer
+			// surface, but should any other I/O-style error appear, skip the
+			// rest of this file and keep the findings already collected
+			// instead of discarding the whole scan.
+			continue
 		}
 	}
 	return findings, nil
+}
+
+// splitLongTolerant is a bufio.SplitFunc that behaves like bufio.ScanLines
+// but never returns bufio.ErrTooLong: a line that would overflow the
+// scanner buffer is emitted truncated (on a UTF-8 rune boundary) rather
+// than aborting the scan.  This guarantees a single pathological >1 MiB
+// line cannot discard findings already collected from other files.
+func splitLongTolerant(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := strings.IndexByte(string(data), '\n'); i >= 0 {
+		// Found a newline; emit the line (dropping a trailing \r) verbatim.
+		return i + 1, dropCR(data[:i]), nil
+	}
+	// No newline in the current buffer.  If we are at EOF, emit whatever
+	// remains.  Otherwise, when the buffer is already full the line is
+	// longer than maxScanLineBytes: emit a rune-safe prefix and advance
+	// past the whole buffer so scanning continues without ErrTooLong.
+	if atEOF {
+		return len(data), dropCR(data), nil
+	}
+	if len(data) >= maxScanLineBytes {
+		cut := safeRuneCut(data)
+		return len(data), data[:cut], nil
+	}
+	// Request more data.
+	return 0, nil, nil
+}
+
+// dropCR removes a single trailing carriage return so CRLF inputs split
+// the same way bufio.ScanLines would.
+func dropCR(data []byte) []byte {
+	if len(data) > 0 && data[len(data)-1] == '\r' {
+		return data[:len(data)-1]
+	}
+	return data
+}
+
+// safeRuneCut returns the largest length <= len(data) that does not split
+// a multibyte UTF-8 rune, so a truncated over-long line stays valid UTF-8.
+func safeRuneCut(data []byte) int {
+	cut := len(data)
+	for cut > 0 && !utf8.RuneStart(data[cut-1]) {
+		cut--
+	}
+	// data[cut-1] is now a rune start; verify the rune it begins is whole.
+	if cut > 0 && cut < len(data) {
+		if r, _ := utf8.DecodeRune(data[cut-1:]); r == utf8.RuneError {
+			cut--
+		}
+	}
+	if cut < 0 {
+		cut = 0
+	}
+	return cut
 }
 
 // Rules returns a defensive copy of the loaded rule set, for callers
@@ -284,9 +365,25 @@ func (d *Detector) Rules() []Rule {
 	return out
 }
 
+// truncateExcerpt caps the excerpt at max runes (not bytes) and appends an
+// ellipsis when it cuts.  Slicing on a rune boundary keeps the excerpt
+// valid UTF-8 for non-ASCII content (the project's primary zh locale and
+// any multibyte README), so the text report and the SARIF result message
+// never emit a broken trailing rune that a strict SARIF consumer rejects.
 func truncateExcerpt(s string, max int) string {
-	if len(s) <= max {
+	if max <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= max {
 		return s
 	}
-	return s[:max-1] + "…"
+	// Keep max-1 runes, leaving room for the ellipsis.
+	runes := 0
+	for i := range s {
+		if runes == max-1 {
+			return s[:i] + "…"
+		}
+		runes++
+	}
+	return s + "…"
 }

@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:7f1d1d,100:b45309&height=160&section=header&text=agentguard&fontColor=ffffff&fontSize=58&fontAlignY=42&desc=catch%20hidden%20agent-instructions%20in%20your%20dependencies&descSize=16&descAlignY=70&descAlign=50" alt="agentguard banner"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/hero-light.svg">
+    <img src="./assets/hero-light.svg" width="900" alt="agentguard — catch hidden agent-instructions in your dependencies：离线、单二进制、30 条规则语料、SARIF 2.1.0、CI 闸门"/>
+  </picture>
 </p>
 
 <p align="center">
@@ -91,6 +95,10 @@ agentguard check .
 
 # 3) CI 里以 SARIF 输出，severity ≥ medium 时非零退出
 agentguard check . --format sarif --output agentguard.sarif
+
+# 4) 增量扫描：先建基线，之后只复查内容变化过的包
+agentguard check . --write-baseline .agentguard-baseline.json   # 建立/刷新基线
+agentguard check . --changed-only .agentguard-baseline.json     # 后续只扫变化的 prose
 ```
 
 <details>
@@ -132,7 +140,8 @@ agentguard: 5 finding(s) at or above medium
 | --- | --- | --- | --- |
 | `--format`, `-f` | `text` \| `sarif` | `text` | 输出格式；`sarif` 可直接喂给 GitHub Advanced Security 和 VS Code SARIF Viewer |
 | `--severity`, `-s` | `low` \| `medium` \| `high` | `medium` | 同时控制「展示哪些 finding」与「非零退出阈值」 |
-| `--changed-only` | path | 空 | 给一个基线 lockfile（JSON），只扫 hash 与基线不同的包；CI 增量模式 |
+| `--changed-only` | path | 空 | 给一个基线 JSON（由 `--write-baseline` 生成），只扫内容 hash 与基线不同的 prose 文件；CI 增量模式。基线缺失时按「首次运行」全量扫描 |
+| `--write-baseline` | path | 空 | 扫描后把本次所有 prose 文件的 hash 写成基线 JSON，供后续 `--changed-only` 比对 |
 | `--ecosystem` | 多次 | 自动检测 | 限制只扫 `node` / `python` / `go` |
 | `--output`, `-o` | path | stdout | 把报告写到文件而不是标准输出 |
 | `--no-color` | bool | `false` | 关闭 ANSI 颜色 |
@@ -154,9 +163,10 @@ agentguard: 5 finding(s) at or above medium
 
 - [x] **m1 · scaffold + Node corpus** — CLI 骨架；`node_modules/` 走扫；30 条 payload 语料；jqwik fixture 复现。
 - [x] **m2 · Python + Go** — `.venv/`、`site-packages/`、`vendor/`、`go.sum` 缓存走扫；regex 抽 docstring；clean fixture 零误报。
-- [x] **m3 · SARIF + CI** — SARIF 2.1.0 输出；finding ≥ medium 时非零退出；`--changed-only` 增量模式；GitHub Action wrapper 计划在 v0.2 落地。
-- [ ] **v0.2** · Cargo / RubyGems 生态、GitHub Action wrapper、规则禁用清单（`.agentguard.yaml`）
-- [ ] **v0.3** · 团队策略服务器（hosted corpus 更新 + 自定义 allowlist + SARIF → Jira）
+- [x] **m3 · SARIF + CI** — SARIF 2.1.0 输出；finding ≥ medium 时非零退出；`--changed-only` 基线增量模式（配合 `--write-baseline`）；GitHub Action wrapper 计划在后续落地。
+- [x] **v0.2 · 可信度修复** — `--changed-only` 真正生效（基线 hash 比对，不再空跑）；超长单行不再中断整次扫描（逐行 rune-safe 截断）；语料补齐到 30 条真实规则（AG001–AG030）；excerpt 按 rune 边界截断，zh 等多字节内容输出合法 UTF-8。
+- [ ] **v0.3** · Cargo / RubyGems 生态、GitHub Action wrapper、规则禁用清单（`.agentguard.yaml`）
+- [ ] **v0.4** · 团队策略服务器（hosted corpus 更新 + 自定义 allowlist + SARIF → Jira）
 - [ ] 显式弃疗：内置 LLM 分类器、IDE 实时插件、自动 strip / 改 prose——这是另一种产品。
 
 完整的 out-of-scope 边界见上方[路线图](#路线图)末尾的「显式弃疗」一项。
@@ -167,6 +177,8 @@ agentguard: 5 finding(s) at or above medium
 - jqwik 事件报道：[Ars Technica](https://arstechnica.com/security/2026/05/fed-up-with-vibe-coders-dev-sneaks-data-nuking-prompt-injection-into-their-code/)。
 - 攻击品类命名：[Nesbitt — Protestware for coding agents](https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html)。
 - 提 issue / PR / 想加新生态：[GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues)。
+
+MIT © 2026 SuperMarioYL
 
 ## Share this
 

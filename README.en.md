@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:7f1d1d,100:b45309&height=160&section=header&text=agentguard&fontColor=ffffff&fontSize=58&fontAlignY=42&desc=catch%20hidden%20agent-instructions%20in%20your%20dependencies&descSize=16&descAlignY=70&descAlign=50" alt="agentguard banner"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/hero-light.svg">
+    <img src="./assets/hero-light.svg" width="900" alt="agentguard — catch hidden agent-instructions in your dependencies: offline, single binary, 30-rule corpus, SARIF 2.1.0, CI gate"/>
+  </picture>
 </p>
 
 <p align="center">
@@ -91,6 +95,10 @@ agentguard check .
 
 # 3) Emit SARIF for CI; non-zero exit when severity ≥ medium
 agentguard check . --format sarif --output agentguard.sarif
+
+# 4) Incremental scans: write a baseline once, then only re-check changed prose
+agentguard check . --write-baseline .agentguard-baseline.json   # establish/refresh baseline
+agentguard check . --changed-only .agentguard-baseline.json     # subsequent runs scan only changed files
 ```
 
 <details>
@@ -139,7 +147,8 @@ gh repo edit --add-topic coding-agent --add-topic agentic --add-topic claude-cod
 | --- | --- | --- | --- |
 | `--format`, `-f` | `text` \| `sarif` | `text` | Output format. `sarif` is consumable by GitHub Advanced Security and the VS Code SARIF viewer. |
 | `--severity`, `-s` | `low` \| `medium` \| `high` | `medium` | Sets both the display floor and the CI exit-code gate. |
-| `--changed-only` | path | empty | Path to a baseline lockfile (JSON). Packages whose hash matches are skipped — incremental CI mode. |
+| `--changed-only` | path | empty | Path to a baseline JSON (from `--write-baseline`). Prose files whose content hash matches the baseline are skipped — incremental CI mode. A missing baseline is treated as a first run (full scan). |
+| `--write-baseline` | path | empty | After scanning, write a baseline JSON of every scanned prose file's content hash to this path, for a later `--changed-only` run. |
 | `--ecosystem` | repeatable | auto-detect | Restrict to `node` / `python` / `go`. |
 | `--output`, `-o` | path | stdout | Write the report to a file instead of stdout. |
 | `--no-color` | bool | `false` | Disable ANSI colour in text mode. |
@@ -161,9 +170,10 @@ The same happy path: scan the bundled jqwik fixture (HIGH finding, exit 1) → p
 
 - [x] **m1 · scaffold + Node corpus** — Cobra CLI; `node_modules/` walker; 30-payload corpus; jqwik fixture detected, exit 1.
 - [x] **m2 · Python + Go** — `.venv/`, `site-packages/`, `vendor/`, Go module cache walked; regex-extracted docstrings; clean fixture stays at zero findings.
-- [x] **m3 · SARIF + CI** — SARIF 2.1.0 output; CI gate at severity ≥ medium; `--changed-only` incremental mode; GitHub Action wrapper slated for v0.2.
-- [ ] **v0.2** — Cargo / RubyGems ecosystems; GitHub Action wrapper; per-project rule disable list (`.agentguard.yaml`).
-- [ ] **v0.3** — Hosted team policy server (central corpus updates + per-org allowlists + SARIF → Jira).
+- [x] **m3 · SARIF + CI** — SARIF 2.1.0 output; CI gate at severity ≥ medium; `--changed-only` baseline incremental mode (paired with `--write-baseline`); GitHub Action wrapper slated for a later release.
+- [x] **v0.2 · credibility fixes** — `--changed-only` now actually works (baseline hash diff, no longer a no-op); a single over-long line no longer aborts the whole scan (per-line rune-safe truncation); corpus filled out to 30 real rules (AG001–AG030); excerpts truncate on a rune boundary so zh / multibyte content emits valid UTF-8.
+- [ ] **v0.3** — Cargo / RubyGems ecosystems; GitHub Action wrapper; per-project rule disable list (`.agentguard.yaml`).
+- [ ] **v0.4** — Hosted team policy server (central corpus updates + per-org allowlists + SARIF → Jira).
 - [ ] Explicitly declined: built-in LLM classifier, IDE / MCP real-time hook, auto-strip of third-party prose — different product.
 
 The full out-of-scope boundary is the "Explicitly declined" item at the end of the [Roadmap](#roadmap) above.
@@ -171,6 +181,8 @@ The full out-of-scope boundary is the "Explicitly declined" item at the end of t
 ## License + contributing
 
 MIT — free commercial use and modification. File bugs, false-positive samples, or new-ecosystem requests at [GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues). PRs welcome; please run `go test ./...` and `go vet ./...` before opening one.
+
+MIT © 2026 SuperMarioYL
 
 ## Share this
 

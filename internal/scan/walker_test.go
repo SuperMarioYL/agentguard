@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -163,6 +164,81 @@ func TestWalkRejectsMissingRoot(t *testing.T) {
 	_, err = Walk(Options{Root: filepath.Join("does", "not", "exist")})
 	if err == nil {
 		t.Fatal("expected error when Root does not exist")
+	}
+}
+
+// TestChangedOnlyNarrowsScan guards fix-changed-only-noop: a full scan
+// followed by a baseline write, then a --changed-only re-scan, must drop the
+// packages whose prose is unchanged and keep only those that changed.
+func TestChangedOnlyNarrowsScan(t *testing.T) {
+	root := testdataPath(t, "node_modules_fixture")
+
+	// 1) Full scan establishes the universe of prose files.
+	full, err := Walk(Options{Root: root})
+	if err != nil {
+		t.Fatalf("full Walk: %v", err)
+	}
+	if len(full) == 0 {
+		t.Fatal("full scan returned zero files")
+	}
+
+	// 2) Write a baseline that records every file's current hash.
+	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
+	data, err := BaselineBytes(full)
+	if err != nil {
+		t.Fatalf("BaselineBytes: %v", err)
+	}
+	if err := os.WriteFile(baselinePath, data, 0o644); err != nil {
+		t.Fatalf("write baseline: %v", err)
+	}
+
+	// 3) With an up-to-date baseline, --changed-only must drop EVERYTHING
+	// (nothing changed since the baseline).
+	unchanged, err := Walk(Options{Root: root, ChangedOnly: baselinePath})
+	if err != nil {
+		t.Fatalf("changed-only Walk: %v", err)
+	}
+	if len(unchanged) != 0 {
+		t.Fatalf("changed-only with a fresh baseline scanned %d files, want 0 (this is the no-op bug)", len(unchanged))
+	}
+
+	// 4) Drop one file's hash from the baseline; --changed-only must now
+	// re-surface exactly that file (and only files not in the baseline).
+	target := full[0].DisplayPath
+	var remaining []File
+	for _, f := range full {
+		if f.DisplayPath != target {
+			remaining = append(remaining, f)
+		}
+	}
+	tb, err := BaselineBytes(remaining)
+	if err != nil {
+		t.Fatalf("BaselineBytes(remaining): %v", err)
+	}
+	if err := os.WriteFile(baselinePath, tb, 0o644); err != nil {
+		t.Fatalf("rewrite baseline: %v", err)
+	}
+
+	changed, err := Walk(Options{Root: root, ChangedOnly: baselinePath})
+	if err != nil {
+		t.Fatalf("changed-only Walk (partial): %v", err)
+	}
+	if len(changed) == 0 {
+		t.Fatal("expected the dropped file to re-surface, got 0")
+	}
+	for _, f := range changed {
+		if f.DisplayPath != target {
+			t.Errorf("changed-only surfaced unexpected file %q (only %q changed)", f.DisplayPath, target)
+		}
+	}
+
+	// 5) A missing baseline path is treated as a first run: scan everything.
+	first, err := Walk(Options{Root: root, ChangedOnly: filepath.Join(t.TempDir(), "absent.json")})
+	if err != nil {
+		t.Fatalf("changed-only with missing baseline: %v", err)
+	}
+	if len(first) != len(full) {
+		t.Errorf("first run with missing baseline scanned %d files, want full %d", len(first), len(full))
 	}
 }
 
