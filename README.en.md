@@ -172,8 +172,9 @@ The same happy path: scan the bundled jqwik fixture (HIGH finding, exit 1) → p
 - [x] **m2 · Python + Go** — `.venv/`, `site-packages/`, `vendor/`, Go module cache walked; regex-extracted docstrings; clean fixture stays at zero findings.
 - [x] **m3 · SARIF + CI** — SARIF 2.1.0 output; CI gate at severity ≥ medium; `--changed-only` baseline incremental mode (paired with `--write-baseline`); GitHub Action wrapper slated for a later release.
 - [x] **v0.2 · credibility fixes** — `--changed-only` now actually works (baseline hash diff, no longer a no-op); a single over-long line no longer aborts the whole scan (per-line rune-safe truncation); corpus filled out to 30 real rules (AG001–AG030); excerpts truncate on a rune boundary so zh / multibyte content emits valid UTF-8.
-- [ ] **v0.3** — Cargo / RubyGems ecosystems; GitHub Action wrapper; per-project rule disable list (`.agentguard.yaml`).
-- [ ] **v0.4** — Hosted team policy server (central corpus updates + per-org allowlists + SARIF → Jira).
+- [x] **v0.3 · correctness fixes** — `--ecosystem node|python` now maps to the internal npm/pypi constants (no more silent false-negatives on a documented flag); the `--changed-only X --write-baseline X` rolling baseline is written from the full file set so incremental CI is no longer silently defeated; `--ecosystem` restriction no longer leaks a generic-fallback README; Python docstring and Go package-doc findings report real source paths instead of a synthetic `__doc__`.
+- [ ] **v0.4** — Cargo / RubyGems ecosystems; GitHub Action wrapper; per-project rule disable list (`.agentguard.yaml`).
+- [ ] **v0.5** — Hosted team policy server (central corpus updates + per-org allowlists + SARIF → Jira).
 - [ ] Explicitly declined: built-in LLM classifier, IDE / MCP real-time hook, auto-strip of third-party prose — different product.
 
 The full out-of-scope boundary is the "Explicitly declined" item at the end of the [Roadmap](#roadmap) above.

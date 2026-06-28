@@ -176,9 +176,7 @@ func walkSitePackages(siteDir, root string) ([]File, error) {
 		if rd := loadPyReadmeFromDir(pkgDir, root, label); rd != nil {
 			out = append(out, *rd)
 		}
-		if ds := loadPyDocstrings(pkgDir, root, label); ds != nil {
-			out = append(out, *ds)
-		}
+		out = append(out, loadPyDocstrings(pkgDir, root, label)...)
 	}
 	return out, nil
 }
@@ -335,20 +333,21 @@ var pyDocstringDelim = regexp.MustCompile(`(?P<prefix>[urbURB]{0,2})(?P<quote>""
 // loadPyDocstrings walks every *.py file under pkgDir (one level deep
 // only — the m2 budget does not justify a full module-tree traversal)
 // and extracts the contents of module-level and top-level function /
-// class docstrings into a synthetic File.  Each extracted docstring
-// line records its source file:line via the Lines slice so the
-// downstream report still shows the original location.
+// class docstrings.  It emits one File per source .py file so every
+// finding's reported location is a real, navigable path on disk, not a
+// synthetic "<pkg>/__doc__" aggregate whose line numbers map to no real
+// source line.
 //
 // We deliberately do not invoke the Python interpreter or parse an AST
 // — a lightweight regex scanner is more than enough for the prose
 // channel this scanner cares about, and keeps the binary offline.
-func loadPyDocstrings(pkgDir, root, label string) *File {
+func loadPyDocstrings(pkgDir, root, label string) []File {
 	entries, err := os.ReadDir(pkgDir)
 	if err != nil {
 		return nil
 	}
 
-	var pyFiles []string
+	var out []File
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -356,56 +355,37 @@ func loadPyDocstrings(pkgDir, root, label string) *File {
 		if !strings.HasSuffix(e.Name(), ".py") {
 			continue
 		}
-		pyFiles = append(pyFiles, filepath.Join(pkgDir, e.Name()))
-	}
-	if len(pyFiles) == 0 {
-		return nil
-	}
-
-	var (
-		firstPath string
-		composite strings.Builder
-		lines     []string
-	)
-	for _, p := range pyFiles {
+		p := filepath.Join(pkgDir, e.Name())
 		docs := extractPyDocstrings(p)
 		if len(docs) == 0 {
 			continue
 		}
-		if firstPath == "" {
-			firstPath = p
-		}
+		var (
+			body  strings.Builder
+			lines []string
+		)
 		for _, d := range docs {
 			for _, ln := range d.lines {
-				composite.WriteString(ln)
-				composite.WriteString("\n")
+				body.WriteString(ln)
+				body.WriteString("\n")
 				lines = append(lines, ln)
 			}
 		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			rel = p
+		}
+		out = append(out, File{
+			Path:        p,
+			DisplayPath: filepath.ToSlash(rel),
+			Package:     label,
+			Ecosystem:   ecosystemPyPI,
+			Kind:        "docstring",
+			Content:     body.String(),
+			Lines:       lines,
+		})
 	}
-	if firstPath == "" {
-		return nil
-	}
-
-	// The composite display path lists the package directory so the
-	// developer sees which folder to inspect; individual line numbers
-	// reference the synthetic __doc__ aggregate, which is good enough
-	// for m2's per-package surfacing.
-	rel, err := filepath.Rel(root, pkgDir)
-	if err != nil {
-		rel = pkgDir
-	}
-	displayDir := filepath.ToSlash(rel)
-
-	return &File{
-		Path:        firstPath,
-		DisplayPath: displayDir + "/__doc__",
-		Package:     label,
-		Ecosystem:   ecosystemPyPI,
-		Kind:        "docstring",
-		Content:     composite.String(),
-		Lines:       lines,
-	}
+	return out
 }
 
 type pyDocstring struct {

@@ -168,25 +168,24 @@ func extractGoModule(modDir, root, label string) []File {
 	// top-level .go file) carry the prose surface that gopkg.in and
 	// pkg.go.dev render as the module's overview — and that a coding
 	// agent reads when it fetches the module to reason about it.
-	if doc := loadGoPackageDocs(modDir, root, label); doc != nil {
-		out = append(out, *doc)
-	}
+	out = append(out, loadGoPackageDocs(modDir, root, label)...)
 	return out
 }
 
-// loadGoPackageDocs concatenates the leading // and /* ... */ comment
-// blocks that immediately precede the `package` clause of every .go
-// file directly under modDir into a single synthetic File.  Comments
-// inside function bodies are intentionally ignored — they do not appear
-// in the rendered package documentation surface and are unlikely to be
+// loadGoPackageDocs extracts the leading // and /* ... */ comment block
+// that immediately precedes the `package` clause of every .go file
+// directly under modDir, emitting one File per source file so a finding
+// reports the real .go path that owns the comment.  Comments inside
+// function bodies are intentionally ignored — they do not appear in the
+// rendered package documentation surface and are unlikely to be
 // summarised by an agent that is sizing up the module.
-func loadGoPackageDocs(modDir, root, label string) *File {
+func loadGoPackageDocs(modDir, root, label string) []File {
 	entries, err := os.ReadDir(modDir)
 	if err != nil {
 		return nil
 	}
 
-	var goFiles []string
+	var out []File
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -198,48 +197,35 @@ func loadGoPackageDocs(modDir, root, label string) *File {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		goFiles = append(goFiles, filepath.Join(modDir, name))
-	}
-	if len(goFiles) == 0 {
-		return nil
-	}
-
-	var (
-		firstPath string
-		body      strings.Builder
-		lines     []string
-	)
-	for _, gf := range goFiles {
+		gf := filepath.Join(modDir, name)
 		docLines := extractGoPackageComment(gf)
 		if len(docLines) == 0 {
 			continue
 		}
-		if firstPath == "" {
-			firstPath = gf
-		}
+		var (
+			body  strings.Builder
+			lines []string
+		)
 		for _, ln := range docLines {
 			body.WriteString(ln)
 			body.WriteString("\n")
 			lines = append(lines, ln)
 		}
+		rel, err := filepath.Rel(root, gf)
+		if err != nil {
+			rel = gf
+		}
+		out = append(out, File{
+			Path:        gf,
+			DisplayPath: filepath.ToSlash(rel),
+			Package:     label,
+			Ecosystem:   ecosystemGo,
+			Kind:        "docstring",
+			Content:     body.String(),
+			Lines:       lines,
+		})
 	}
-	if firstPath == "" {
-		return nil
-	}
-
-	rel, err := filepath.Rel(root, firstPath)
-	if err != nil {
-		rel = firstPath
-	}
-	return &File{
-		Path:        firstPath,
-		DisplayPath: filepath.ToSlash(rel),
-		Package:     label,
-		Ecosystem:   ecosystemGo,
-		Kind:        "docstring",
-		Content:     body.String(),
-		Lines:       lines,
-	}
+	return out
 }
 
 // extractGoPackageComment returns the text of the contiguous comment

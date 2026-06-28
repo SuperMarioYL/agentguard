@@ -47,8 +47,9 @@ type Options struct {
 	// Root is the directory to scan.  Required.
 	Root string
 	// Ecosystems restricts the scan to a subset of enumerators.  nil or
-	// empty means all detected ecosystems.  Recognised values: "npm",
-	// "pypi", "go".
+	// empty means all detected ecosystems.  Recognised values (case- and
+	// whitespace-insensitive, with the documented aliases honoured):
+	// "node"/"npm", "python"/"pypi", "go".
 	Ecosystems []string
 	// ChangedOnly is the path to a JSON baseline produced by a previous
 	// run.  When set, Walk drops every prose file whose content hash
@@ -124,12 +125,51 @@ func filterChanged(files []File, base baselineFile) []File {
 	return out
 }
 
+// FilterChanged drops every file whose (DisplayPath, content-hash) pair
+// already appears in the baseline at baselinePath, returning only the prose
+// that is new or modified relative to that baseline run.  A missing
+// baseline is treated as an empty baseline (first run), so the first
+// incremental invocation scans everything.
+//
+// Narrowing is the caller's job, not Walk's: a caller that wants the
+// rolling-baseline CI pattern (--changed-only X --write-baseline X) must
+// write the baseline from the FULL file set and only then narrow, otherwise
+// the baseline is rewritten from just the changed files and the next run
+// re-scans every previously-unchanged package.  Walk therefore returns the
+// full set and runCheck calls FilterChanged after writing the baseline.
+func FilterChanged(files []File, baselinePath string) ([]File, error) {
+	base, err := loadBaseline(baselinePath)
+	if err != nil {
+		return nil, err
+	}
+	return filterChanged(files, base), nil
+}
+
 const (
 	ecosystemNPM     = "npm"
 	ecosystemPyPI    = "pypi"
 	ecosystemGo      = "go"
 	ecosystemGeneric = "generic"
 )
+
+// normaliseEcosystemToken maps the user-facing spellings documented for
+// --ecosystem (node | python | go) onto the internal enumerator constants
+// (npm | pypi | go).  Without this alias map, wants() compared the user's
+// "node" token to the "npm" constant with a bare strings.EqualFold and
+// never matched, so --ecosystem node silently suppressed the npm enumerator
+// and the scanner reported "no findings" on a tree that contained real
+// payloads — the worst failure mode for a security tool.  Case- and
+// whitespace-insensitive.
+func normaliseEcosystemToken(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "node":
+		return ecosystemNPM
+	case "python":
+		return ecosystemPyPI
+	}
+	return s
+}
 
 // maxProseBytes is a soft cap on a single prose file.  README payloads
 // above 1 MiB are almost certainly machine-generated and not the threat
@@ -161,7 +201,7 @@ func Walk(opts Options) ([]File, error) {
 			return true
 		}
 		for _, e := range opts.Ecosystems {
-			if strings.EqualFold(strings.TrimSpace(e), eco) {
+			if strings.EqualFold(normaliseEcosystemToken(e), eco) {
 				return true
 			}
 		}
@@ -223,9 +263,13 @@ func Walk(opts Options) ([]File, error) {
 	}
 
 	// Fallback for fixtures and single-package directories: when no
-	// ecosystem-aware enumerator produced anything, treat the root as a
+	// ecosystem-aware enumerator produced anything AND the user did not
+	// restrict the scan to a specific ecosystem, treat the root as a
 	// generic single-package source so the walker still yields a result.
-	if len(files) == 0 {
+	// Gating on Ecosystems honours the --ecosystem contract: asking for
+	// "go" (or node/python) on a tree with no matching packages must yield
+	// no findings, not leak a root README as a generic-ecosystem hit.
+	if len(files) == 0 && len(opts.Ecosystems) == 0 {
 		generic, _ := walkGenericPackage(rootAbs, rootAbs)
 		files = append(files, generic...)
 	}

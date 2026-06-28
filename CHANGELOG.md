@@ -5,16 +5,68 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 ## [Unreleased]
 
-### Planned for v0.3.0
+### Planned for v0.4.0
 
 - Cargo and RubyGems ecosystem walkers.
 - `action.yml` GitHub Action wrapper so `agentguard` runs natively in workflows.
 - Per-project rule disable list at `.agentguard.yaml` (allowlists, severity overrides).
 
-### Planned for v0.4.0
+### Planned for v0.5.0
 
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
+
+## [0.3.0] — 2026-06-28
+
+Correctness release. No new detector rules, ecosystems, or CLI surface — four
+source-audit fixes that make already-advertised behaviour honest and the
+file:line value prop true for every channel.
+
+### Fixed
+
+- **`--ecosystem node` and `--ecosystem python` no longer silently suppress the
+  scan** (`internal/scan/walker.go`). `--help` and both READMEs document
+  `--ecosystem node | python | go`, but the internal enumerator constants are
+  `npm` / `pypi` / `go` and `wants()` compared the user's token to the constant
+  with a bare `strings.EqualFold` and no alias map, so `node` never matched
+  `npm` and `python` never matched `pypi` — both quietly dropped the npm/python
+  enumerators and the scan reported "no findings" (exit 0) even when real
+  payloads were present. A security tool silently reporting "clean" on a
+  documented flag is the worst failure mode. `wants()` now normalises aliases
+  (`node`→`npm`, `python`→`pypi`, case- and whitespace-insensitive; `go`
+  unchanged) before comparing.
+- **`--changed-only X --write-baseline X` no longer collapses the baseline**
+  (`cmd/agentguard/main.go`, `internal/scan/walker.go`). `Walk` applied
+  `filterChanged` internally, so the `files` slice `runCheck` handed to
+  `BaselineBytes` was already the narrowed (only-changed) set; the rolling
+  baseline was rewritten from just the changed files, and on the next run every
+  previously-unchanged package was absent from the baseline, treated as new,
+  and re-scanned — silently defeating the incremental-CI feature. Baseline
+  emission is now decoupled from the scan filter: `Walk` returns the full set,
+  `runCheck` narrows with the newly exported `scan.FilterChanged` against the
+  pre-existing baseline, then writes the baseline from the full set, then scans
+  the narrowed set.
+- **`--ecosystem` no longer leaks a generic-fallback finding**
+  (`internal/scan/walker.go`). When no ecosystem enumerator produced files,
+  `Walk` unconditionally fell back to `walkGenericPackage(root)` with no check
+  on `opts.Ecosystems`, so `--ecosystem go` (or `node`/`python`) on a project
+  whose root has its own README surfaced that README as a `generic`-ecosystem
+  finding, violating the declared filter. The fallback is now gated on
+  `len(opts.Ecosystems) == 0` — it still runs for bare fixtures and
+  single-package dirs where the user did not restrict to an ecosystem.
+- **Python docstring and Go package-doc findings report real source paths**
+  (`internal/scan/python.go`, `internal/scan/gomod.go`). `loadPyDocstrings`
+  built one composite `File` per package whose `DisplayPath` was
+  `<pkg>/__doc__` — a path that does not exist on disk — so a finding was
+  reported as `site-packages/<pkg>/__doc__:N`, a location the developer could
+  not open or navigate to. It now emits one `File` per source `.py` file with
+  the real relative path. `loadGoPackageDocs` gets the same treatment so
+  multi-file Go modules do not attribute the 2nd+ file's package comment to the
+  first `.go` path.
+
+### Changed
+
+- project `VERSION` → `0.3.0`.
 
 ## [0.2.0] — 2026-06-22
 
@@ -116,6 +168,7 @@ Initial public release. Covers the three milestones (m1–m3) in the README road
 - Source files are never opened — the scanner walks only prose channels a coding agent
   ingests as context.
 
-[Unreleased]: https://github.com/SuperMarioYL/agentguard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/SuperMarioYL/agentguard/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/SuperMarioYL/agentguard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SuperMarioYL/agentguard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/SuperMarioYL/agentguard/releases/tag/v0.1.0

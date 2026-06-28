@@ -136,14 +136,29 @@ func runCheck(stdout, stderr io.Writer, root string, opts *checkOptions) error {
 		return fmt.Errorf("load corpus: %w", err)
 	}
 
+	// Walk returns the FULL file set (ChangedOnly is not set on the walk)
+	// so the baseline can cover every package.  The scan is narrowed
+	// separately: filter against the PRE-EXISTING baseline first, then write
+	// the new baseline from the full set, then scan the narrowed set.
+	// Writing the baseline from the full set — not the narrowed set — is what
+	// keeps the rolling-baseline pattern `--changed-only X --write-baseline X`
+	// stable; otherwise the baseline collapses to just the changed packages
+	// and the next run re-scans every previously-unchanged package.
 	scanOpts := scan.Options{
-		Root:        root,
-		Ecosystems:  opts.ecosystems,
-		ChangedOnly: opts.changedOnly,
+		Root:       root,
+		Ecosystems: opts.ecosystems,
 	}
 	files, err := scan.Walk(scanOpts)
 	if err != nil {
 		return fmt.Errorf("walk %q: %w", root, err)
+	}
+
+	scanFiles := files
+	if opts.changedOnly != "" {
+		scanFiles, err = scan.FilterChanged(files, opts.changedOnly)
+		if err != nil {
+			return fmt.Errorf("--changed-only: %w", err)
+		}
 	}
 
 	if opts.writeBaseline != "" {
@@ -156,7 +171,7 @@ func runCheck(stdout, stderr io.Writer, root string, opts *checkOptions) error {
 		}
 	}
 
-	findings, err := detector.ScanAll(files)
+	findings, err := detector.ScanAll(scanFiles)
 	if err != nil {
 		return fmt.Errorf("detect: %w", err)
 	}
