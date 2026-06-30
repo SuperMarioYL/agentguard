@@ -5,16 +5,42 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 ## [Unreleased]
 
-### Planned for v0.4.0
+### Planned for v0.5.0
 
 - Cargo and RubyGems ecosystem walkers.
 - `action.yml` GitHub Action wrapper so `agentguard` runs natively in workflows.
 - Per-project rule disable list at `.agentguard.yaml` (allowlists, severity overrides).
-
-### Planned for v0.5.0
-
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
+
+## [0.4.0] — 2026-07-01
+
+Correctness release. No new detector rules, ecosystems, or CLI surface — one
+source-audit fix that hardens the incremental-CI rolling-baseline path the
+v0.3.0 release set out to make honest.
+
+### Fixed
+
+- **`--changed-only X --write-baseline X` no longer drops unchanged packages
+  from the rolling baseline** (`internal/scan/walker.go`). `filterChanged` did
+  `out := files[:0]`, compacting the kept (changed) files into the *same*
+  backing array as the caller's slice. `runCheck` calls
+  `scan.FilterChanged(files, X)` and then `scan.BaselineBytes(files)` on that
+  very slice, so `BaselineBytes` read a slice the filter had overwritten in
+  place: every package whose prose was *unchanged* (and therefore filtered out)
+  was clobbered by the compaction and never written to the baseline. On the
+  next run those packages were absent from the baseline, treated as new, and
+  re-scanned — reintroducing the exact incremental-CI regression v0.3.0's
+  baseline-decoupling fix removed. `filterChanged` now allocates a fresh result
+  slice (`make([]File, 0, len(files))`) and never mutates the caller's backing
+  array. Guarded by two regression tests: one asserts the post-`FilterChanged`
+  slice is untouched and the baseline still covers every `DisplayPath`, and one
+  runs the full `--changed-only X --write-baseline X` rolling pattern twice and
+  asserts the second scan covers zero unchanged files.
+
+### Changed
+
+- project `VERSION` → `0.4.0`.
 
 ## [0.3.0] — 2026-06-28
 
@@ -168,7 +194,8 @@ Initial public release. Covers the three milestones (m1–m3) in the README road
 - Source files are never opened — the scanner walks only prose channels a coding agent
   ingests as context.
 
-[Unreleased]: https://github.com/SuperMarioYL/agentguard/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/SuperMarioYL/agentguard/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/SuperMarioYL/agentguard/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/SuperMarioYL/agentguard/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/SuperMarioYL/agentguard/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/SuperMarioYL/agentguard/releases/tag/v0.1.0

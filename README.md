@@ -166,8 +166,8 @@ agentguard: 5 finding(s) at or above medium
 - [x] **m3 · SARIF + CI** — SARIF 2.1.0 输出；finding ≥ medium 时非零退出；`--changed-only` 基线增量模式（配合 `--write-baseline`）；GitHub Action wrapper 计划在后续落地。
 - [x] **v0.2 · 可信度修复** — `--changed-only` 真正生效（基线 hash 比对，不再空跑）；超长单行不再中断整次扫描（逐行 rune-safe 截断）；语料补齐到 30 条真实规则（AG001–AG030）；excerpt 按 rune 边界截断，zh 等多字节内容输出合法 UTF-8。
 - [x] **v0.3 · 正确性修复** — `--ecosystem node|python` 别名映射到内部 npm/pypi 常量，不再静默漏扫；`--changed-only X --write-baseline X` 滚动基线从全量集合覆写，增量 CI 不再被悄悄击穿；`--ecosystem` 限定时不再泄漏 generic 兜底 README；Python docstring / Go package doc 按真实源文件路径上报，不再用合成 `__doc__`。
-- [ ] **v0.4** · Cargo / RubyGems 生态、GitHub Action wrapper、规则禁用清单（`.agentguard.yaml`）
-- [ ] **v0.5** · 团队策略服务器（hosted corpus 更新 + 自定义 allowlist + SARIF → Jira）
+- [x] **v0.4 · 正确性修复** — `--changed-only X --write-baseline X` 滚动基线不再丢失未变更包：`filterChanged` 曾用 `files[:0]` 就地覆写调用方切片的底层数组，导致 `runCheck` 写基线时读到被破坏的切片、未变更包被悄悄剔除、下一轮全量重扫；改为分配全新结果切片，并加两条回归测试守护。
+- [ ] **v0.5** · Cargo / RubyGems 生态、GitHub Action wrapper、规则禁用清单（`.agentguard.yaml`）、团队策略服务器（hosted corpus 更新 + 自定义 allowlist + SARIF → Jira）
 - [ ] 显式弃疗：内置 LLM 分类器、IDE 实时插件、自动 strip / 改 prose——这是另一种产品。
 
 完整的 out-of-scope 边界见上方[路线图](#路线图)末尾的「显式弃疗」一项。

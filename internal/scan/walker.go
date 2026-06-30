@@ -114,8 +114,18 @@ func BaselineBytes(files []File) ([]byte, error) {
 // filterChanged drops every file whose (DisplayPath, content-hash) pair
 // already appears in the baseline, returning only the prose that is new
 // or modified relative to the baseline run.
+//
+// The result is a freshly allocated slice — never an in-place compaction of
+// the caller's backing array.  A previous `out := files[:0]` aliased and
+// overwrote the input's backing array, so a caller that filtered and then
+// re-read the original slice (runCheck's rolling-baseline
+// `--changed-only X --write-baseline X`: FilterChanged then BaselineBytes on
+// the SAME slice) saw the unchanged, filtered-out files clobbered by the
+// kept files compacted to the front — silently dropping them from the
+// baseline and re-scanning them on the next run.  Allocating a fresh slice
+// keeps the caller's slice intact so the full set can still be serialised.
 func filterChanged(files []File, base baselineFile) []File {
-	out := files[:0]
+	out := make([]File, 0, len(files))
 	for _, f := range files {
 		if prev, ok := base.Hashes[f.DisplayPath]; ok && prev == hashContent(f.Content) {
 			continue

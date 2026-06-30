@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -239,6 +240,122 @@ func TestChangedOnlyNarrowsScan(t *testing.T) {
 	}
 	if len(first) != len(full) {
 		t.Errorf("first run with missing baseline scanned %d files, want full %d", len(first), len(full))
+	}
+}
+
+// TestFilterChangedDoesNotMutateCallerSlice guards
+// fix-filterchanged-aliasing-corrupts-baseline: filterChanged once did
+// `out := files[:0]`, compacting the kept files into the caller's backing
+// array.  runCheck's rolling-baseline pattern `--changed-only X
+// --write-baseline X` calls FilterChanged(files) and THEN BaselineBytes(files)
+// on the SAME slice, so the in-place compaction clobbered the unchanged,
+// filtered-out files and dropped them from the baseline — re-scanning every
+// previously-unchanged package on the next run.  filterChanged must return a
+// fresh slice and leave the input untouched.
+func TestFilterChangedDoesNotMutateCallerSlice(t *testing.T) {
+	// Three files; only the middle one is "changed" relative to the baseline,
+	// so a buggy in-place compaction would shift it to index 0 and overwrite
+	// the surrounding unchanged entries.
+	files := []File{
+		{DisplayPath: "a/README.md", Content: "alpha"},
+		{DisplayPath: "b/README.md", Content: "bravo-CHANGED"},
+		{DisplayPath: "c/README.md", Content: "charlie"},
+	}
+	wantPaths := []string{"a/README.md", "b/README.md", "c/README.md"}
+
+	// Baseline records the ORIGINAL hashes of a and c (unchanged) but a stale
+	// hash for b, so only b is "changed".
+	base := baselineFile{Hashes: map[string]string{
+		"a/README.md": hashContent("alpha"),
+		"b/README.md": hashContent("bravo"), // stale → b counts as changed
+		"c/README.md": hashContent("charlie"),
+	}}
+
+	changed := filterChanged(files, base)
+
+	// 1) The filtered result is exactly the one changed file.
+	if len(changed) != 1 || changed[0].DisplayPath != "b/README.md" {
+		t.Fatalf("filterChanged = %v, want exactly [b/README.md]", displayPaths(changed))
+	}
+
+	// 2) The caller's slice is untouched: same length, same DisplayPaths in
+	// order.  A `files[:0]` aliasing bug would have compacted b to index 0.
+	if len(files) != 3 {
+		t.Fatalf("caller slice length = %d after filterChanged, want 3 (slice was mutated)", len(files))
+	}
+	for i, want := range wantPaths {
+		if files[i].DisplayPath != want {
+			t.Errorf("files[%d].DisplayPath = %q after filterChanged, want %q (in-place mutation corrupted the caller's slice)",
+				i, files[i].DisplayPath, want)
+		}
+	}
+
+	// 3) The downstream consequence runCheck depends on: a baseline written
+	// from the post-filter `files` slice still covers EVERY file's DisplayPath.
+	data, err := BaselineBytes(files)
+	if err != nil {
+		t.Fatalf("BaselineBytes: %v", err)
+	}
+	var bf baselineFile
+	if err := json.Unmarshal(data, &bf); err != nil {
+		t.Fatalf("unmarshal baseline: %v", err)
+	}
+	for _, want := range wantPaths {
+		if _, ok := bf.Hashes[want]; !ok {
+			t.Errorf("baseline written after FilterChanged is missing %q (unchanged package dropped from baseline)", want)
+		}
+	}
+}
+
+// TestRollingBaselineStaysStableAcrossRuns mirrors runCheck's
+// `--changed-only X --write-baseline X` rolling-baseline CI pattern end to
+// end: write the baseline from the FULL set after filtering, run twice, and
+// assert the second changed-only scan still yields zero unchanged files.
+// This is the integration-level guard for
+// fix-filterchanged-aliasing-corrupts-baseline (and the v0.3.0
+// fix-changed-only-write-baseline-incomplete it reinforces).
+func TestRollingBaselineStaysStableAcrossRuns(t *testing.T) {
+	root := testdataPath(t, "node_modules_fixture")
+	baselinePath := filepath.Join(t.TempDir(), "baseline.json")
+
+	// roll reproduces runCheck's ordering exactly: Walk the FULL set, filter
+	// against the existing baseline, write the new baseline from the FULL set
+	// (not the filtered set), and return how many files the scan would cover.
+	roll := func() (scanCount int) {
+		full, err := Walk(Options{Root: root})
+		if err != nil {
+			t.Fatalf("Walk: %v", err)
+		}
+		if len(full) == 0 {
+			t.Fatal("full scan returned zero files")
+		}
+		narrowed, err := FilterChanged(full, baselinePath)
+		if err != nil {
+			t.Fatalf("FilterChanged: %v", err)
+		}
+		// Baseline is written from the FULL set, AFTER FilterChanged has run —
+		// exactly runCheck's call order, the order that the aliasing bug
+		// corrupted.
+		data, err := BaselineBytes(full)
+		if err != nil {
+			t.Fatalf("BaselineBytes: %v", err)
+		}
+		if err := os.WriteFile(baselinePath, data, 0o644); err != nil {
+			t.Fatalf("write baseline: %v", err)
+		}
+		return len(narrowed)
+	}
+
+	// First run: no baseline yet → everything is "changed".
+	if got := roll(); got == 0 {
+		t.Fatal("first run scanned 0 files, want the full set (missing baseline should scan everything)")
+	}
+
+	// Second run: nothing changed AND the baseline written by run 1 must have
+	// covered every file (it would not have, under the aliasing bug, because
+	// BaselineBytes read a corrupted slice) → zero files to re-scan.
+	if got := roll(); got != 0 {
+		t.Fatalf("second changed-only run scanned %d files, want 0 (baseline dropped unchanged packages — incremental CI silently broken)", got)
 	}
 }
 
