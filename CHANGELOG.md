@@ -5,13 +5,48 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 ## [Unreleased]
 
-### Planned for v0.5.0
+### Planned for v0.6.0
 
 - Cargo and RubyGems ecosystem walkers.
 - `action.yml` GitHub Action wrapper so `agentguard` runs natively in workflows.
 - Per-project rule disable list at `.agentguard.yaml` (allowlists, severity overrides).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
+
+## [0.5.0] — 2026-07-04
+
+Correctness release. No new detector rules, ecosystems, or CLI surface — two
+source-audit fixes that both restore the navigable `file:line` value prop in the
+paths that previously reported the wrong line.
+
+### Fixed
+
+- **An over-long (>1 MiB) prose line no longer shifts the line number of every
+  following finding** (`internal/detect/patterns.go`). `splitLongTolerant`
+  emitted a rune-safe truncated prefix for a line larger than the scanner buffer
+  but advanced only `len(data)`, so `bufio` re-buffered the physical line's tail
+  and emitted it as a *second* token — `ScanAll`'s `lineNo` over-counted and
+  every finding after such a line was reported one (or more) lines too high (a
+  payload on real line 2 reported at line 3). The split function is now a stateful
+  closure (`newSplitLongTolerant`) that, after emitting the prefix, silently
+  consumes the rest of that physical line up to and including the next `\n`, so a
+  single over-long line counts as exactly one logical line. Guarded by a
+  regression test asserting a payload immediately after a >1 MiB line reports
+  line 2.
+- **Python docstring and Go package-comment findings now report the real source
+  line** (`internal/scan/python.go`, `internal/scan/gomod.go`). `loadPyDocstrings`
+  and `loadGoPackageDocs` built each `File`'s `Content` from only the concatenated
+  docstring / comment body and discarded the captured `startLine`, so `ScanAll`
+  counted `lineNo` from 1 over the stripped body — a payload on real line 7 was
+  reported as `foo.py:1`. v0.3.0 fixed the docstring *path* but left the *line*
+  wrong; the body is now padded with empty lines up to the real start line (and
+  `extractGoPackageComment` reports the comment block's start line) so each finding
+  points at its true `.py`/`.go` source line. Guarded by two regression tests
+  through the real `scan.Walk` → `detect.ScanAll` path.
+
+### Changed
+
+- project `VERSION` → `0.5.0`.
 
 ## [0.4.0] — 2026-07-01
 

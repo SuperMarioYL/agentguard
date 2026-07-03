@@ -237,7 +237,7 @@ func (d *Detector) ScanAll(files []scan.File) ([]Finding, error) {
 		// dropped lines by re-splitting them ourselves so the remainder of
 		// the file is still scanned.  splitLongTolerant truncates any
 		// single line longer than the buffer instead of erroring out.
-		scanner.Split(splitLongTolerant)
+		scanner.Split(newSplitLongTolerant())
 		lineNo := 0
 		for scanner.Scan() {
 			lineNo++
@@ -301,32 +301,60 @@ func (d *Detector) ScanAll(files []scan.File) ([]Finding, error) {
 	return findings, nil
 }
 
-// splitLongTolerant is a bufio.SplitFunc that behaves like bufio.ScanLines
-// but never returns bufio.ErrTooLong: a line that would overflow the
-// scanner buffer is emitted truncated (on a UTF-8 rune boundary) rather
-// than aborting the scan.  This guarantees a single pathological >1 MiB
-// line cannot discard findings already collected from other files.
-func splitLongTolerant(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
+// newSplitLongTolerant returns a bufio.SplitFunc that behaves like
+// bufio.ScanLines but never returns bufio.ErrTooLong AND never splits a
+// single over-long physical line into more than one token.  A line longer
+// than maxScanLineBytes is emitted once as a rune-safe truncated prefix;
+// the remainder of that same physical line — up to and including the next
+// '\n' — is then consumed silently, emitting no further token, so the whole
+// physical line counts as exactly one logical line.  This keeps ScanAll's
+// lineNo faithful to the source: before this fix bufio re-buffered the
+// dropped tail and emitted it as a SECOND token, so every finding after a
+// >1 MiB line was reported one (or more) lines too high.
+//
+// The skip state lives in a closure, so each scan gets its own split
+// function — the returned closure must NOT be shared across scanners.
+func newSplitLongTolerant() bufio.SplitFunc {
+	skipRemainder := false
+	return func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if skipRemainder {
+			// A truncated prefix was already emitted for the current
+			// over-long line; swallow the rest of that physical line
+			// (through the next '\n') without producing a token so the
+			// tail is not counted as an additional line.
+			if i := strings.IndexByte(string(data), '\n'); i >= 0 {
+				skipRemainder = false
+				return i + 1, nil, nil
+			}
+			// No line end yet: consume what we have and ask for more (or
+			// stop cleanly at EOF).  Advancing keeps bufio from panicking
+			// on a no-progress split.
+			skipRemainder = !atEOF
+			return len(data), nil, nil
+		}
+		if atEOF && len(data) == 0 {
+			return 0, nil, nil
+		}
+		if i := strings.IndexByte(string(data), '\n'); i >= 0 {
+			// Found a newline; emit the line (dropping a trailing \r) verbatim.
+			return i + 1, dropCR(data[:i]), nil
+		}
+		// No newline in the current buffer.  If we are at EOF, emit whatever
+		// remains.  Otherwise, when the buffer is already full the line is
+		// longer than maxScanLineBytes: emit a rune-safe prefix, then enter
+		// skip mode so the rest of this physical line is consumed as part of
+		// the SAME logical line instead of re-emitted as a second token.
+		if atEOF {
+			return len(data), dropCR(data), nil
+		}
+		if len(data) >= maxScanLineBytes {
+			cut := safeRuneCut(data)
+			skipRemainder = true
+			return len(data), data[:cut], nil
+		}
+		// Request more data.
 		return 0, nil, nil
 	}
-	if i := strings.IndexByte(string(data), '\n'); i >= 0 {
-		// Found a newline; emit the line (dropping a trailing \r) verbatim.
-		return i + 1, dropCR(data[:i]), nil
-	}
-	// No newline in the current buffer.  If we are at EOF, emit whatever
-	// remains.  Otherwise, when the buffer is already full the line is
-	// longer than maxScanLineBytes: emit a rune-safe prefix and advance
-	// past the whole buffer so scanning continues without ErrTooLong.
-	if atEOF {
-		return len(data), dropCR(data), nil
-	}
-	if len(data) >= maxScanLineBytes {
-		cut := safeRuneCut(data)
-		return len(data), data[:cut], nil
-	}
-	// Request more data.
-	return 0, nil, nil
 }
 
 // dropCR removes a single trailing carriage return so CRLF inputs split

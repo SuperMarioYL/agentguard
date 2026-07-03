@@ -198,7 +198,7 @@ func loadGoPackageDocs(modDir, root, label string) []File {
 			continue
 		}
 		gf := filepath.Join(modDir, name)
-		docLines := extractGoPackageComment(gf)
+		startLine, docLines := extractGoPackageComment(gf)
 		if len(docLines) == 0 {
 			continue
 		}
@@ -206,6 +206,15 @@ func loadGoPackageDocs(modDir, root, label string) []File {
 			body  strings.Builder
 			lines []string
 		)
+		// Pad with empty lines up to the comment block's real start line so
+		// the detector's 1-based lineNo over Content matches the true .go
+		// source line, instead of counting from 1 over the stripped comment
+		// body (which reported every package-doc finding at an unnavigable
+		// line, e.g. real line 7 shown as foo.go:1).
+		for len(lines) < startLine-1 {
+			body.WriteString("\n")
+			lines = append(lines, "")
+		}
 		for _, ln := range docLines {
 			body.WriteString(ln)
 			body.WriteString("\n")
@@ -228,18 +237,21 @@ func loadGoPackageDocs(modDir, root, label string) []File {
 	return out
 }
 
-// extractGoPackageComment returns the text of the contiguous comment
-// block (line or block style) that immediately precedes the `package`
-// keyword in a .go file.  Comment markers are stripped so the detector
-// sees prose, not syntax.
+// extractGoPackageComment returns the source line of the first comment
+// line and the text of the contiguous comment block (line or block style)
+// that immediately precedes the `package` keyword in a .go file.  Comment
+// markers are stripped so the detector sees prose, not syntax.  The
+// returned startLine lets loadGoPackageDocs pad the assembled Content so a
+// finding's reported line matches the real .go source line rather than an
+// index into the stripped comment body.
 //
 // Subsequent doc comments inside the file are ignored — those attach to
 // declarations, and m2's threat model is the package-level summary that
 // pkg.go.dev surfaces.
-func extractGoPackageComment(path string) []string {
+func extractGoPackageComment(path string) (int, []string) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return 0, nil
 	}
 	defer func() { _ = f.Close() }()
 
@@ -247,11 +259,31 @@ func extractGoPackageComment(path string) []string {
 	br.Buffer(make([]byte, 0, 64*1024), 1<<20)
 
 	var (
-		comments []string
-		buf      []string
-		inBlock  bool
+		comments  []string
+		buf       []string
+		inBlock   bool
+		lineNo    int
+		bufStart  int
+		startLine int
 	)
+	// add appends a stripped comment line to buf, recording the source line
+	// of the block's first line so the caller can anchor Content to it.
+	add := func(s string) {
+		if len(buf) == 0 {
+			bufStart = lineNo
+		}
+		buf = append(buf, s)
+	}
+	// flush moves buf into comments, capturing startLine on the first flush.
+	flush := func() {
+		if len(comments) == 0 && len(buf) > 0 {
+			startLine = bufStart
+		}
+		comments = append(comments, buf...)
+		buf = nil
+	}
 	for br.Scan() {
+		lineNo++
 		line := br.Text()
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
@@ -266,10 +298,9 @@ func extractGoPackageComment(path string) []string {
 			if idx := strings.Index(line, "*/"); idx >= 0 {
 				body := line[:idx]
 				if t := strings.TrimSpace(strings.TrimPrefix(body, "*")); t != "" {
-					buf = append(buf, t)
+					add(t)
 				}
-				comments = append(comments, buf...)
-				buf = nil
+				flush()
 				inBlock = false
 				continue
 			}
@@ -277,13 +308,13 @@ func extractGoPackageComment(path string) []string {
 			body = strings.TrimPrefix(body, "*")
 			body = strings.TrimSpace(body)
 			if body != "" {
-				buf = append(buf, body)
+				add(body)
 			}
 			continue
 		}
 		if strings.HasPrefix(trimmed, "//") {
 			body := strings.TrimSpace(strings.TrimPrefix(trimmed, "//"))
-			buf = append(buf, body)
+			add(body)
 			continue
 		}
 		if strings.HasPrefix(trimmed, "/*") {
@@ -291,25 +322,25 @@ func extractGoPackageComment(path string) []string {
 			if idx := strings.Index(rest, "*/"); idx >= 0 {
 				body := strings.TrimSpace(rest[:idx])
 				if body != "" {
-					buf = append(buf, body)
+					add(body)
 				}
 				continue
 			}
 			body := strings.TrimSpace(rest)
 			if body != "" {
-				buf = append(buf, body)
+				add(body)
 			}
 			inBlock = true
 			continue
 		}
 		if strings.HasPrefix(trimmed, "package ") {
-			comments = append(comments, buf...)
-			return comments
+			flush()
+			return startLine, comments
 		}
 		// Hit an import or other declaration before the package
 		// clause — comments above that are unrelated to the package
 		// summary, so reset and keep scanning until package appears.
 		buf = nil
 	}
-	return comments
+	return startLine, comments
 }

@@ -365,6 +365,18 @@ func loadPyDocstrings(pkgDir, root, label string) []File {
 			lines []string
 		)
 		for _, d := range docs {
+			// Pad with empty lines up to the docstring's real start line so
+			// the detector's 1-based lineNo over Content matches the true .py
+			// source line.  d.lines[0] sits on source line d.startLine (the
+			// line carrying the opening triple-quote), so before writing this
+			// docstring's body we grow lines/body to length startLine-1.
+			// Without this the concatenated docstring body was scanned from
+			// line 1 and every finding pointed at an unnavigable location
+			// (e.g. a payload on real line 7 reported as foo.py:1).
+			for len(lines) < d.startLine-1 {
+				body.WriteString("\n")
+				lines = append(lines, "")
+			}
 			for _, ln := range d.lines {
 				body.WriteString(ln)
 				body.WriteString("\n")
