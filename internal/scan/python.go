@@ -227,22 +227,50 @@ func loadPyMetadata(metaDir, root, label string) *File {
 	}
 
 	body := strings.ReplaceAll(string(data), "\r\n", "\n")
-	headers, description := splitPyMetadata(body)
+	headers, headerLine, descStart, description := splitPyMetadata(body)
 
-	var lines []string
+	// Place each emitted prose line at its REAL METADATA source line so the
+	// detector's 1-based lineNo over Content matches the file, instead of a
+	// synthetic index that counted Summary/Keywords + the description body
+	// from line 1 (which reported a deep description-body payload at, e.g.,
+	// METADATA:4 when it really lived on METADATA line 8).  Non-emitted source
+	// lines (other headers, blanks) stay empty so only the prose channels are
+	// scanned — just now at navigable line numbers.
+	place := make(map[int]string)
+	maxIdx := -1
 	for _, key := range []string{"Summary", "Keywords"} {
-		if v, ok := headers[key]; ok && v != "" {
-			lines = append(lines, key+": "+v)
+		v, ok := headers[key]
+		if !ok || v == "" {
+			continue
+		}
+		li, ok := headerLine[key]
+		if !ok {
+			continue
+		}
+		// Fold any header continuation newlines to spaces so the emitted line
+		// stays single-line and does not shift following source-line counts.
+		place[li] = key + ": " + strings.ReplaceAll(v, "\n", " ")
+		if li > maxIdx {
+			maxIdx = li
 		}
 	}
-	if description != "" {
-		descLines := strings.Split(description, "\n")
-		for _, ln := range descLines {
-			lines = append(lines, ln)
+	if description != "" && descStart >= 0 {
+		for j, ln := range strings.Split(description, "\n") {
+			li := descStart + j
+			place[li] = ln
+			if li > maxIdx {
+				maxIdx = li
+			}
 		}
 	}
-	if len(lines) == 0 {
+	if maxIdx < 0 {
 		return nil
+	}
+	lines := make([]string, maxIdx+1)
+	for i := range lines {
+		if s, ok := place[i]; ok {
+			lines[i] = s
+		}
 	}
 
 	rel, err := filepath.Rel(root, path)
@@ -264,8 +292,14 @@ func loadPyMetadata(metaDir, root, label string) *File {
 // the Summary, Keywords, and free-form Description sections.  Header
 // continuation lines (starting with a space) are folded into the
 // previous header's value.
-func splitPyMetadata(body string) (map[string]string, string) {
+//
+// It also returns, for line-faithful reporting, the 0-based source-line index
+// of each header's first line (headerLine) and the 0-based source-line index
+// at which the free-form description body begins (descStart, or -1 when there
+// is none) so loadPyMetadata can anchor emitted prose to real METADATA lines.
+func splitPyMetadata(body string) (map[string]string, map[string]int, int, string) {
 	headers := make(map[string]string)
+	headerLine := make(map[string]int)
 	var (
 		lastKey string
 		idx     int
@@ -289,18 +323,27 @@ func splitPyMetadata(body string) (map[string]string, string) {
 		key := strings.TrimSpace(ln[:colon])
 		val := strings.TrimSpace(ln[colon+1:])
 		headers[key] = val
+		if _, seen := headerLine[key]; !seen {
+			headerLine[key] = i
+		}
 		lastKey = key
 		idx = i + 1
 	}
+	descStart := -1
 	var desc string
 	if blank >= 0 && idx < len(lines) {
 		desc = strings.Join(lines[idx:], "\n")
+		descStart = idx
 	}
 	if d, ok := headers["Description"]; ok && desc == "" {
 		desc = d
+		if li, ok := headerLine["Description"]; ok {
+			descStart = li
+		}
 		delete(headers, "Description")
+		delete(headerLine, "Description")
 	}
-	return headers, strings.TrimRight(desc, "\n")
+	return headers, headerLine, descStart, strings.TrimRight(desc, "\n")
 }
 
 // loadPyReadmeFromDir tries the conventional README names directly under
@@ -428,6 +471,21 @@ func extractPyDocstrings(path string) []pyDocstring {
 		quote    string
 		lineNo   int
 	)
+	// appendBody records a body line and lazily anchors the docstring's
+	// startLine to the FIRST body line actually captured — NOT the opening
+	// delimiter line.  For the PEP 257-preferred multi-line style where the
+	// opening `"""` sits alone on its own line, the first body text lands on
+	// the NEXT source line, so anchoring startLine to the delimiter reported
+	// every docstring-body finding one line too low (e.g. a payload on real
+	// source line 4 shown as mod.py:3).  Anchoring to the first captured body
+	// line keeps both the same-line (`"""payload"""`) and `"""`-alone styles
+	// faithful to the real source line.
+	appendBody := func(s string) {
+		if current.startLine == 0 {
+			current.startLine = lineNo
+		}
+		current.lines = append(current.lines, s)
+	}
 	for br.Scan() {
 		lineNo++
 		line := br.Text()
@@ -438,18 +496,18 @@ func extractPyDocstrings(path string) []pyDocstring {
 			}
 			quote = line[m[4]:m[5]]
 			rest := line[m[5]:]
-			current = &pyDocstring{startLine: lineNo}
+			current = &pyDocstring{}
 			if closeIdx := strings.Index(rest, quote); closeIdx >= 0 {
 				body := rest[:closeIdx]
 				if strings.TrimSpace(body) != "" {
-					current.lines = append(current.lines, body)
+					appendBody(body)
 					out = append(out, *current)
 				}
 				current = nil
 				continue
 			}
 			if strings.TrimSpace(rest) != "" {
-				current.lines = append(current.lines, rest)
+				appendBody(rest)
 			}
 			inString = true
 			continue
@@ -457,7 +515,7 @@ func extractPyDocstrings(path string) []pyDocstring {
 		if closeIdx := strings.Index(line, quote); closeIdx >= 0 {
 			body := line[:closeIdx]
 			if strings.TrimSpace(body) != "" {
-				current.lines = append(current.lines, body)
+				appendBody(body)
 			}
 			if len(current.lines) > 0 {
 				out = append(out, *current)
@@ -466,7 +524,7 @@ func extractPyDocstrings(path string) []pyDocstring {
 			inString = false
 			continue
 		}
-		current.lines = append(current.lines, line)
+		appendBody(line)
 	}
 	return out
 }

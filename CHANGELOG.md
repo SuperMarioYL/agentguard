@@ -5,13 +5,51 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 ## [Unreleased]
 
-### Planned for v0.6.0
+### Planned (future)
 
 - Cargo and RubyGems ecosystem walkers.
 - `action.yml` GitHub Action wrapper so `agentguard` runs natively in workflows.
 - Per-project rule disable list at `.agentguard.yaml` (allowlists, severity overrides).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
+
+## [0.6.0] — 2026-07-11
+
+Correctness release. No new detector rules, ecosystems, or CLI surface — three
+source-audit fixes: one silent false-negative on a scanned surface, and two that
+restore the navigable `file:line` value prop in paths that reported the wrong line.
+
+### Fixed
+
+- **Vendored Go packages produced by `go mod vendor` are no longer silently
+  scanned as zero files** (`internal/scan/gomod.go`). `go mod vendor` strips
+  `go.mod` from every vendored package, so `findGoModuleRoots` found nothing and
+  the walker fell back to scanning the bare `vendor/` directory — whose direct
+  children are import-path segments, not prose — yielding **zero** files. A
+  vendored dependency whose README carried a payload was silently missed
+  (`exit 0`, "no findings") on a directory the README hero explicitly lists as
+  scanned — the worst failure mode for a security tool. The scanner now recovers
+  the real vendored package directories from `vendor/modules.txt` (the canonical
+  list `go mod vendor` writes) and, when that is absent, enumerates every
+  prose-bearing package subtree directly. Guarded by regression tests over a
+  realistic go.mod-stripped vendor tree (with and without `modules.txt`).
+- **Python multi-line docstrings whose opening `"""` sits alone on its line now
+  report the real source line** (`internal/scan/python.go`). `extractPyDocstrings`
+  anchored `startLine` to the delimiter line, but for the PEP 257-preferred style
+  where `"""` sits alone the first body text lands on the *next* source line, so
+  every such docstring-body finding was reported one line too low (a payload on
+  real line 5 shown as `mod.py:4`). `startLine` is now captured lazily at the
+  first body line actually appended, keeping both the same-line and `"""`-alone
+  styles faithful. Guarded by a regression test.
+- **Python `METADATA` / `PKG-INFO` description-body findings now report the real
+  source line** (`internal/scan/python.go`). `loadPyMetadata` built a synthetic
+  `Content` of the Summary/Keywords headers followed by the description body and
+  counted `lineNo` from 1 over it, so a payload deep in the description was
+  reported at a synthetic index (a payload on real line 9 shown as `METADATA:4`).
+  The Summary/Keywords headers and every description line are now placed at their
+  real `METADATA` source line (recovered via `splitPyMetadata`'s blank-line
+  separator), mirroring the v0.5.0 docstring fix for the metadata channel.
+  Guarded by a regression test.
 
 ## [0.5.0] — 2026-07-04
 

@@ -35,14 +35,23 @@ func walkGoModuleCache(dir, root string) ([]File, error) {
 
 	var out []File
 	// First pass: collect every directory that owns a go.mod.  This is
-	// the canonical "module root" marker for both vendored trees and
-	// $GOPATH/pkg/mod layouts.
+	// the canonical "module root" marker for the $GOPATH/pkg/mod layout.
 	modRoots := findGoModuleRoots(dir)
 	if len(modRoots) == 0 {
-		// Fall back to treating the input directory as a single module;
-		// covers tiny fixtures and the case where a user points us at a
-		// freshly extracted module tarball.
-		modRoots = []string{dir}
+		// A real `go mod vendor` tree strips go.mod from EVERY vendored
+		// package, so findGoModuleRoots returns nothing and the old
+		// single-dir fallback scanned only vendor/ itself — whose direct
+		// children are import-path segments, not prose — yielding ZERO
+		// files (a silent false-negative on a directory the docs list as
+		// scanned).  Recover the real vendored package dirs instead.
+		if vendorRoots := findVendorPackageDirs(dir); len(vendorRoots) > 0 {
+			modRoots = vendorRoots
+		} else {
+			// Fall back to treating the input directory as a single module;
+			// covers tiny fixtures and the case where a user points us at a
+			// freshly extracted module tarball.
+			modRoots = []string{dir}
+		}
 	}
 
 	for _, mr := range modRoots {
@@ -80,6 +89,97 @@ func findGoModuleRoots(start string) []string {
 		return nil
 	})
 	return roots
+}
+
+// findVendorPackageDirs recovers the vendored package directories from a
+// `go mod vendor` tree.  `go mod vendor` strips go.mod from every vendored
+// package, so findGoModuleRoots finds nothing and the caller would otherwise
+// scan the bare vendor/ directory (no prose) and report zero files.
+//
+// It prefers vendor/modules.txt — the canonical list `go mod vendor` writes,
+// whose bare (non-'#') lines are the vendored package import paths — and falls
+// back to enumerating every subdirectory that directly owns a README or a
+// non-test .go file.  Returns nil when dir is not a vendor tree (no
+// modules.txt and no prose-bearing subdir), so the caller keeps its
+// single-directory fixture fallback.
+func findVendorPackageDirs(dir string) []string {
+	var roots []string
+	seen := make(map[string]bool)
+	add := func(p string) {
+		if seen[p] {
+			return
+		}
+		if info, err := os.Stat(p); err == nil && info.IsDir() {
+			roots = append(roots, p)
+			seen[p] = true
+		}
+	}
+
+	// Primary: parse vendor/modules.txt for the canonical package list.
+	if f, err := os.Open(filepath.Join(dir, "modules.txt")); err == nil {
+		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				// '# <module> <version>' declarations and '## <annotation>'
+				// lines are not package import paths.
+				continue
+			}
+			add(filepath.Join(dir, filepath.FromSlash(line)))
+		}
+		_ = f.Close()
+		if len(roots) > 0 {
+			return roots
+		}
+	}
+
+	// Fallback: no usable modules.txt — enumerate every subdirectory that
+	// directly owns prose (a README or a non-test .go file) and treat each as
+	// a module root.  This covers hand-assembled vendor trees and matches
+	// extractGoModule's per-directory reading semantics.
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			if info != nil && info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		switch filepath.Base(path) {
+		case ".git", ".hg", ".svn":
+			return filepath.SkipDir
+		}
+		if dirHasGoProse(path) {
+			add(path)
+		}
+		return nil
+	})
+	return roots
+}
+
+// dirHasGoProse reports whether dir directly contains a README or a non-test
+// .go file — the prose surface extractGoModule reads for a module root.
+func dirHasGoProse(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(strings.ToLower(name), "readme") {
+			return true
+		}
+		if strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+			return true
+		}
+	}
+	return false
 }
 
 // goModuleLabel derives a "module@version" label from the module-cache
