@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "name": "agentguard",
+  "github": "https://github.com/SuperMarioYL/agentguard",
+  "host": "agentguard.lei6393.com",
+  "lang": { "primary": "zh", "toggle": true },
+  "accent": ["#d8542f"],
+  "hero": {
+    "eyebrow": { "zh": "离线 · 单二进制 · 无 API key", "en": "Offline · one binary · no API key" },
+    "headline": {
+      "zh": "在 agent 读进依赖之前\n先揪出藏着的注入指令",
+      "en": "Catch the injected instructions\nbefore your agent reads them"
+    },
+    "sub": {
+      "zh": "扫遍依赖树里 README、CHANGELOG、docstring、清单字段这些 agent 真会读进上下文的 prose 通道，把写给 Coding Agent 的祈使句按 file:line 列出来。离线、无 LLM。",
+      "en": "Sweeps the prose channels your agent actually ingests — README, CHANGELOG, docstrings, manifest fields — and lists every imperative written for a coding agent by file:line. Offline, no LLM."
+    },
+    "command": "agentguard check .",
+    "cta": { "zh": "开始使用", "en": "Get started" },
+    "ctaGithub": { "zh": "在 GitHub 查看", "en": "View on GitHub" }
+  },
+  "advantages": [
+    {
+      "title": { "zh": "扫的是 prose，不是代码", "en": "It scans the prose, not the code" },
+      "body": {
+        "zh": "只抽包对外暴露的「人话」通道——README、CHANGELOG、docstring、package.json 的 description/keywords、Go 的 doc.go——永远不读源码。这正是 Snyk、Socket、OSV-Scanner 正面看不见的那条侧信道：prose 进 agent 上下文，再变成行为。",
+        "en": "It extracts only a package's human-facing channels — README, CHANGELOG, docstrings, package.json description/keywords, Go doc.go — and never reads source code. That is exactly the side channel Snyk, Socket and OSV-Scanner miss: prose into agent context, then into action."
+      },
+      "chips": ["› README · CHANGELOG · docstring", "› 永不读源码"]
+    },
+    {
+      "title": { "zh": "离线单二进制，不调 LLM", "en": "Offline single binary, no LLM" },
+      "body": {
+        "zh": "匹配引擎是 30 条 go:embed 进二进制的 YAML 语料，加两条邻近启发式（祈使动词 × agent 称呼，同行 120 字符内）。不联网、无 LLM、零 API key——所以误报可调试、CI 可重放。",
+        "en": "The matcher is a 30-rule YAML corpus compiled in via go:embed, plus two proximity heuristics (an imperative verb within 120 chars of an agent-address term on the same line). No network, no LLM, zero API keys — so false positives are debuggable and CI runs are replayable."
+      },
+      "chips": ["› 30 条内嵌语料", "› 无 LLM · 无 API key"]
+    },
+    {
+      "title": { "zh": "SARIF 输出，CI 里当闸门", "en": "SARIF output, a gate in CI" },
+      "body": {
+        "zh": "severity ≥ medium 时默认非零退出，一行 agentguard check 就能挡住一次合并。--format sarif 产出 SARIF 2.1.0，直接喂给 GitHub Advanced Security 和 VS Code SARIF Viewer。",
+        "en": "At severity ≥ medium it exits non-zero by default, so one agentguard check can block a merge. --format sarif emits SARIF 2.1.0 that feeds straight into GitHub Advanced Security and the VS Code SARIF Viewer."
+      },
+      "chips": ["› severity ≥ medium 非零退出", "› SARIF 2.1.0"]
+    },
+    {
+      "title": { "zh": "四生态走扫 · 基线增量", "en": "Four ecosystems · baseline incremental" },
+      "body": {
+        "zh": "npm 的 node_modules、PyPI 的 site-packages、Go 的 vendor 与 module 缓存，外加通用兜底，一次扫全。--write-baseline 记下每个 prose 文件的 hash，--changed-only 之后只复查内容变过的包，CI 增量不重扫。",
+        "en": "npm node_modules, PyPI site-packages, Go vendor and module cache, plus a generic fallback — all in one pass. --write-baseline records each prose file's hash, then --changed-only re-checks only the packages whose content changed, so incremental CI never rescans everything."
+      },
+      "chips": ["› npm · PyPI · Go", "› 基线增量扫描"]
+    }
+  ],
+  "scene": { "kind": "particle-field" },
+  "cta": {
+    "headline": {
+      "zh": "供应链扫描器只看代码和 CVE，可 agent 读的是 prose",
+      "en": "Supply-chain scanners read code and CVEs; your agent reads prose"
+    },
+    "sub": {
+      "zh": "开源、MIT、无付费墙。一条 agentguard check 就能在 CI 里把这条侧信道挡在门外。",
+      "en": "Open source, MIT, no paywall. One agentguard check gates this side channel right in CI."
+    },
+    "button": { "zh": "在 GitHub 上开始", "en": "Get started on GitHub" }
+  },
+  "footer": {
+    "tag": {
+      "zh": "Claude Code 时代的依赖 prose 注入扫描器",
+      "en": "The dependency prose-injection scanner for the Claude Code era"
+    }
+  }
+}
