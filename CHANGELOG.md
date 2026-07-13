@@ -13,6 +13,30 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.7.0] — 2026-07-14
+
+Correctness release. No new detector rules, ecosystems, or CLI surface — one
+source-audit fix that restores the navigable `file:line` value prop on the last
+prose channel that still reported a synthetic line number: the npm `package.json`
+manifest.
+
+### Fixed
+
+- **`package.json` findings now report the real manifest source line, not a
+  synthetic index** (`internal/scan/node.go`). The manifest reader emitted the
+  `description` on line 1 and each keyword on lines 2, 3, … regardless of where
+  those fields actually sat in the file, so an injection payload hidden in a
+  `description` was always reported at `package.json:1` (and keyword payloads at
+  `:2+`) by both the text and SARIF reporters — an unnavigable location the
+  developer could not open. Each prose line is now anchored at its real source
+  line (a `description` payload on physical line 6 is reported at line 6, not 1).
+  Channels that share a physical line (compact single-line manifests) are joined
+  rather than dropped, so no finding is lost. This brings the npm channel in line
+  with the Python docstring/METADATA and Go doc-comment channels, whose
+  real-source-line reporting was fixed in 0.5.0 and 0.6.0. Regression tests:
+  `TestPackageJSONProseReportsRealSourceLine` and
+  `TestPackageJSONProseNeverDropsChannel`.
+
 ## [0.6.0] — 2026-07-11
 
 Correctness release. No new detector rules, ecosystems, or CLI surface — three

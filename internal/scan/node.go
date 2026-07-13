@@ -137,36 +137,89 @@ func readPackageJSON(path string) (*packageJSON, error) {
 	return &pj, nil
 }
 
-// loadPackageJSONProse renders the prose-bearing manifest fields as a
-// line-oriented synthetic File so a finding can report file:line in terms
-// the developer can navigate ("line 2 of package.json description").
+// loadPackageJSONProse renders the prose-bearing manifest fields
+// (description, keywords) as a line-oriented synthetic File so a finding can
+// report file:line in navigable terms.
+//
+// Each emitted prose line is anchored at its REAL package.json source line.
+// The previous version emitted the description on synthetic line 1 and each
+// keyword on lines 2, 3, … regardless of where those fields actually sat in
+// the manifest, so a payload in the description was always reported at
+// package.json:1 (and keywords at 2+) — an unnavigable location the developer
+// could not open, undercutting the file:line value prop that the Python
+// METADATA / docstring and Go doc-comment channels already honour. Anchoring
+// to the field's real source line makes the npm channel consistent with them.
 func loadPackageJSONProse(path, root, label string) *File {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return nil
 	}
-	pj, err := readPackageJSON(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
-	var (
-		b     strings.Builder
-		lines []string
-	)
-	add := func(s string) {
-		b.WriteString(s)
-		b.WriteString("\n")
-		lines = append(lines, s)
-	}
-	if pj.Description != "" {
-		add("description: " + pj.Description)
-	}
-	for _, kw := range pj.Keywords {
-		add("keyword: " + kw)
-	}
-	if len(lines) == 0 {
+	var pj packageJSON
+	if err := json.Unmarshal(data, &pj); err != nil {
 		return nil
 	}
+	if pj.Description == "" && len(pj.Keywords) == 0 {
+		return nil
+	}
+
+	src := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+
+	// place maps a 0-based source-line index to the synthetic prose emitted for
+	// that line. Two prose channels that fall on the same physical line (e.g. a
+	// compact single-line manifest) are joined rather than dropped, so no prose
+	// channel — and therefore no finding — is lost relative to the old
+	// always-emit behaviour.
+	place := make(map[int]string)
+	maxIdx := -1
+	put := func(li int, s string) {
+		if li < 0 {
+			li = 0 // never drop a prose channel: fall back to the first line
+		}
+		if prev, ok := place[li]; ok {
+			place[li] = prev + " " + s
+		} else {
+			place[li] = s
+		}
+		if li > maxIdx {
+			maxIdx = li
+		}
+	}
+
+	if pj.Description != "" {
+		put(jsonKeyLine(src, "description", 0), "description: "+pj.Description)
+	}
+	// Anchor keyword search to the "keywords" array region so a keyword whose
+	// text coincides with an earlier JSON key name is not mis-mapped, and scan
+	// forward so repeated identical keywords map to successive occurrences.
+	kwStart := jsonKeyLine(src, "keywords", 0)
+	if kwStart < 0 {
+		kwStart = 0
+	}
+	cursor := kwStart
+	for _, kw := range pj.Keywords {
+		li := keywordLine(src, kw, cursor)
+		if li < 0 {
+			li = kwStart
+		} else {
+			cursor = li
+		}
+		put(li, "keyword: "+kw)
+	}
+	if maxIdx < 0 {
+		return nil
+	}
+
+	lines := make([]string, maxIdx+1)
+	for i := range lines {
+		if s, ok := place[i]; ok {
+			lines[i] = s
+		}
+	}
+
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
 		rel = path
@@ -177,7 +230,36 @@ func loadPackageJSONProse(path, root, label string) *File {
 		Package:     label,
 		Ecosystem:   ecosystemNPM,
 		Kind:        "metadata",
-		Content:     b.String(),
+		Content:     strings.Join(lines, "\n") + "\n",
 		Lines:       lines,
 	}
+}
+
+// jsonKeyLine returns the 0-based source-line index of the first line at or
+// after `from` that declares the JSON object key `key` (the quoted key
+// followed by a ':' on the same line), or -1 when not found.
+func jsonKeyLine(src []string, key string, from int) int {
+	needle := `"` + key + `"`
+	for i := from; i < len(src); i++ {
+		idx := strings.Index(src[i], needle)
+		if idx < 0 {
+			continue
+		}
+		if strings.Contains(src[i][idx+len(needle):], ":") {
+			return i
+		}
+	}
+	return -1
+}
+
+// keywordLine returns the 0-based source-line index of the first line at or
+// after `from` that contains the quoted keyword literal, or -1 when not found.
+func keywordLine(src []string, kw string, from int) int {
+	needle := `"` + kw + `"`
+	for i := from; i < len(src); i++ {
+		if strings.Contains(src[i], needle) {
+			return i
+		}
+	}
+	return -1
 }
