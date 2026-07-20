@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <a href="https://github.com/SuperMarioYL/agentguard/releases"><img alt="Release" src="https://img.shields.io/badge/release-WIP-orange.svg"></a>
   <a href="./.github/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/badge/CI-go%20build%20%2B%20test-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.24-00ADD8?logo=go">
