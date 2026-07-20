@@ -279,7 +279,7 @@ Initial public release. Covers the three milestones (m1–m3) in the README road
 - **Docs and packaging**
   - Bilingual README: `README.md` (Simplified Chinese, primary), `README.en.md` (English),
     `README.zh-CN.md` pointer.
-  - MIT license.
+  - Apache 2.0 license.
   - GitHub Actions workflow at `.github/workflows/ci.yml` running `go vet`, `go build`,
     `go test` on Ubuntu and macOS for Go 1.24.
   - `assets/demo.tape` — VHS script that renders the canonical jqwik demo as a 30-second cast.
