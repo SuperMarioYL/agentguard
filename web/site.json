@@ -60,8 +60,8 @@
       "en": "Supply-chain scanners read code and CVEs; your agent reads the words inside the package"
     },
     "sub": {
-      "zh": "开源、MIT、无付费墙。一条命令就能在 CI 里把这条暗道堵死。",
-      "en": "Open source, MIT, no paywall. One command closes this back door right in your CI."
+      "zh": "开源、Apache-2.0、无付费墙。一条命令就能在 CI 里把这条暗道堵死。",
+      "en": "Open source, Apache-2.0, no paywall. One command closes this back door right in your CI."
     },
     "button": { "zh": "在 GitHub 上开始", "en": "Get started on GitHub" }
   },
