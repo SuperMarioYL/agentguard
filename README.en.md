@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <a href="https://github.com/SuperMarioYL/agentguard/releases"><img alt="Release" src="https://img.shields.io/badge/release-WIP-orange.svg"></a>
   <a href="./.github/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/badge/CI-go%20build%20%2B%20test-blue.svg"></a>
   <img alt="Go version" src="https://img.shields.io/badge/go-1.24-00ADD8?logo=go">
@@ -23,7 +23,7 @@
 
 agentguard is the supply-chain pre-flight check a **Coding Agent** workflow has been missing. Before you point Claude Code, Cursor, or Codex CLI at an unfamiliar repo, run `agentguard check .` — in under five seconds it surfaces every README, CHANGELOG, docstring, and YAML field inside your dependency tree that contains an imperative sentence addressed not to a human but to the LLM about to read it. The jqwik incident (May 2026, [Ars Technica](https://arstechnica.com/security/2026/05/fed-up-with-vibe-coders-dev-sneaks-data-nuking-prompt-injection-into-their-code/)) is the canonical first hit; the [chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp)–era attack surface — agents reading third-party prose into context and acting on it — is what this protects.
 
-It is **a single static Go binary, offline, stdlib-first, MIT-licensed**: zero API keys, zero network calls, ~5 seconds on a 500-package `node_modules`, non-zero exit in CI by default. The closest analogue to what [@simonw](https://twitter.com/simonw) has been describing as "the supply-chain shape of the prompt-injection class" — built for the **Agentic** workflows in [langgenius/dify](https://github.com/langgenius/dify) and the everyday Claude Code refactors catalogued in [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code).
+It is **a single static Go binary, offline, stdlib-first, Apache-2.0-licensed**: zero API keys, zero network calls, ~5 seconds on a 500-package `node_modules`, non-zero exit in CI by default. The closest analogue to what [@simonw](https://twitter.com/simonw) has been describing as "the supply-chain shape of the prompt-injection class" — built for the **Agentic** workflows in [langgenius/dify](https://github.com/langgenius/dify) and the everyday Claude Code refactors catalogued in [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code).
 
 ---
 
@@ -181,9 +181,9 @@ The full out-of-scope boundary is the "Explicitly declined" item at the end of t
 
 ## License + contributing
 
-MIT — free commercial use and modification. File bugs, false-positive samples, or new-ecosystem requests at [GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues). PRs welcome; please run `go test ./...` and `go vet ./...` before opening one.
+Apache-2.0 — free commercial use and modification. File bugs, false-positive samples, or new-ecosystem requests at [GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues). PRs welcome; please run `go test ./...` and `go vet ./...` before opening one.
 
-MIT © 2026 SuperMarioYL
+Apache-2.0 © 2026 SuperMarioYL
 
 ## Share this
 

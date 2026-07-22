@@ -23,7 +23,7 @@
 
 agentguard 在你把 Claude Code、Cursor、Codex CLI 指向一个新仓库**之前**，先把它的 `node_modules / site-packages / vendor` 里所有 prose 通道过一遍，把任何朝着 Coding Agent 喊话的祈使句（"delete all files"、"ignore previous instructions"、"if you are an AI"…）按 file:line 列出来。是 2026 年 5 月 jqwik 事件揭示的那条新攻击面——一条 `npm install` 之后没读过的 README，就够让 agent 把 `.env` 上传。
 
-它是**单个静态 Go 二进制、完全离线、stdlib 优先、MIT 协议**——5 秒扫完 500 个 npm 包，CI 里直接非零退出。
+它是**单个静态 Go 二进制、完全离线、stdlib 优先、Apache-2.0 协议**——5 秒扫完 500 个 npm 包，CI 里直接非零退出。
 
 ---
 
@@ -174,18 +174,18 @@ agentguard: 5 finding(s) at or above medium
 
 ## 致谢与许可证
 
-- MIT，自由商用与修改。
+- Apache-2.0，自由商用与修改。
 - jqwik 事件报道：[Ars Technica](https://arstechnica.com/security/2026/05/fed-up-with-vibe-coders-dev-sneaks-data-nuking-prompt-injection-into-their-code/)。
 - 攻击品类命名：[Nesbitt — Protestware for coding agents](https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html)。
 - 提 issue / PR / 想加新生态：[GitHub Issues](https://github.com/SuperMarioYL/agentguard/issues)。
 
-MIT © 2026 SuperMarioYL
+Apache-2.0 © 2026 SuperMarioYL
 
 ## Share this
 
 ```
 agentguard — Claude Code 时代的依赖扫描器，
 专抓藏在 README/docstring 里、写给 Coding Agent 看的 prompt 注入。
-单二进制 / 离线 / MIT。
+单二进制 / 离线 / Apache-2.0。
 https://github.com/SuperMarioYL/agentguard
 ```

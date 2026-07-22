@@ -195,17 +195,23 @@ func loadPackageJSONProse(path, root, label string) *File {
 	// Anchor keyword search to the "keywords" array region so a keyword whose
 	// text coincides with an earlier JSON key name is not mis-mapped, and scan
 	// forward so repeated identical keywords map to successive occurrences.
+	// The cursor carries a (line, byteOffset) position: after a match the next
+	// search resumes strictly past that occurrence's bytes, so a second
+	// identical keyword on a LATER physical line maps to its own real source
+	// line (instead of re-matching and joining onto the first occurrence's
+	// line), while a second identical keyword on the SAME physical line still
+	// joins (no later match on that line -> it maps to that line).
 	kwStart := jsonKeyLine(src, "keywords", 0)
 	if kwStart < 0 {
 		kwStart = 0
 	}
-	cursor := kwStart
+	cursor := kwCursor{line: kwStart}
 	for _, kw := range pj.Keywords {
-		li := keywordLine(src, kw, cursor)
+		li, next := keywordLine(src, kw, cursor)
 		if li < 0 {
 			li = kwStart
 		} else {
-			cursor = li
+			cursor = next
 		}
 		put(li, "keyword: "+kw)
 	}
@@ -252,14 +258,46 @@ func jsonKeyLine(src []string, key string, from int) int {
 	return -1
 }
 
+// kwCursor is a (line, byteOffset) search position. After keywordLine matches
+// an occurrence it returns a cursor positioned just past that occurrence, so a
+// subsequent search resumes strictly after it instead of re-matching the same
+// occurrence — the fix for repeated identical keywords on different physical
+// lines of a multi-line "keywords" array.
+type kwCursor struct {
+	line int
+	off  int // byte offset within src[line] to start searching from
+}
+
 // keywordLine returns the 0-based source-line index of the first line at or
-// after `from` that contains the quoted keyword literal, or -1 when not found.
-func keywordLine(src []string, kw string, from int) int {
+// after c.line that contains the quoted keyword literal. On the starting
+// line the search resumes strictly after c.off (past the previous match's
+// bytes); on later lines the whole line is searched. It also returns a cursor
+// positioned just past the matched occurrence so a subsequent call does not
+// re-match it. Returns -1, kwCursor{} when not found.
+//
+// Resuming after the matched byte offset is what makes a second identical
+// keyword on a LATER physical line map to its own real source line: once the
+// starting line has no further match the search advances. A second identical
+// keyword on the SAME physical line is still found there (a later match on
+// that line) and so joins onto it, preserving the compact single-line
+// duplicate behaviour. Distinct keywords are unaffected.
+func keywordLine(src []string, kw string, c kwCursor) (int, kwCursor) {
 	needle := `"` + kw + `"`
-	for i := from; i < len(src); i++ {
-		if strings.Contains(src[i], needle) {
-			return i
+	for i := c.line; i < len(src); i++ {
+		start := 0
+		if i == c.line {
+			start = c.off
 		}
+		line := src[i]
+		if start > len(line) {
+			continue
+		}
+		idx := strings.Index(line[start:], needle)
+		if idx < 0 {
+			continue
+		}
+		abs := start + idx
+		return i, kwCursor{line: i, off: abs + len(needle)}
 	}
-	return -1
+	return -1, kwCursor{}
 }

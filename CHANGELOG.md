@@ -13,6 +13,40 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.8.0] — 2026-07-23
+
+Correctness release. No new detector rules, ecosystems, or CLI surface — one
+source-audit fix that completes the npm `package.json` real-source-line
+treatment for the single case v0.7.0 did not cover: repeated identical
+keywords in a multi-line `"keywords"` array.
+
+### Fixed
+
+- **A repeated identical keyword on a later physical line of a multi-line
+  `"keywords"` array now maps to its own real source line, instead of being
+  joined onto the first occurrence's line** (`internal/scan/node.go`).
+  `loadPackageJSONProse` mapped each keyword to a source line via
+  `keywordLine`, whose cursor carried only a line index and searched inclusive
+  from it; when two identical keywords sat on different physical lines the
+  second search re-entered at the first occurrence's line, re-matched that same
+  line, and the second occurrence was joined onto the first. Because `ScanAll`
+  dedups by `(file, line, rule)`, only one finding was produced for two payload
+  occurrences — the second was permanently hidden, so a developer who removed
+  the flagged line left the unflagged duplicate in place. The cursor now carries
+  a `(line, byteOffset)` position and `keywordLine` resumes strictly past the
+  previously-matched occurrence, so a second identical keyword on a later line
+  advances to its own line (a second on the same physical line still joins,
+  preserving the compact single-line duplicate behaviour; distinct keywords and
+  the description channel are unaffected). Regression:
+  `TestPackageJSONProseRepeatedKeywordRealSourceLine`.
+
+### Changed
+
+- **License prose reconciliation** (`README.md`). The `LICENSE` is Apache-2.0
+  and the README badge already read Apache-2.0, but the README prose still said
+  "MIT" in four places (tagline, license section, footer, share-this pitch);
+  these now read Apache-2.0 to match the badge and `LICENSE`.
+
 ## [0.7.0] — 2026-07-14
 
 Correctness release. No new detector rules, ecosystems, or CLI surface — one
