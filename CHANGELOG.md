@@ -13,6 +13,40 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.9.0] — 2026-07-26
+
+Correctness fix release. No new detector rules, ecosystems, or CLI surface —
+one source-audit fix from a fresh bug-hunter audit of the shipped v0.8.0 Go
+source, hardening the npm `package.json` channel's `file:line` navigability
+against embedded-newline line-offset drift (the value prop the v0.7.0
+line-anchoring rewrite and v0.8.0 keyword-cursor fix built up).
+
+### Fixed
+
+- **The npm manifest channel now folds embedded newlines in the `description`
+  and `keyword` prose so `file:line` mapping no longer drifts**
+  (`internal/scan/node.go`). `loadPackageJSONProse` emitted
+  `pj.Description` directly into its synthetic prose line, but
+  `json.Unmarshal` turns a JSON `\n` escape inside the string value into a
+  REAL newline; when a `package.json` description carried a `\n` (valid JSON
+  on a single physical source line), `place[li]` became a multi-line string
+  and `Content = strings.Join(lines, "\n")` embedded that newline. `ScanAll`
+  scans `Content` with a line-based `bufio.SplitFunc`, so the embedded `\n`
+  became an extra physical line: the description's tail text was reported at
+  `package.json:(li+1)` instead of `li`, and EVERY subsequent keyword's line
+  mapping shifted by the number of embedded newlines preceding it — so a
+  payload in a keyword on real source line N was reported at
+  `package.json:(N + embeddedNewlineCount)`, an unnavigable location the
+  developer could not open. The sibling Python metadata renderer already
+  enforced the invariant: `loadPyMetadata` folds header newlines with
+  `strings.ReplaceAll(v, "\n", " ")` (`internal/scan/python.go`); the npm
+  description/keyword path now applies the same fold before `put`, so each
+  emitted prose line stays single-line and does not shift following
+  source-line counts. The payload is still detected — impact is
+  navigability, not a missed finding. Regression:
+  `TestPackageJSONProseFoldsEmbeddedNewline`,
+  `TestPackageJSONProseFoldsEmbeddedNewlineCompact`.
+
 ## [0.8.0] — 2026-07-23
 
 Correctness release. No new detector rules, ecosystems, or CLI surface — one

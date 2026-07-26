@@ -190,7 +190,14 @@ func loadPackageJSONProse(path, root, label string) *File {
 	}
 
 	if pj.Description != "" {
-		put(jsonKeyLine(src, "description", 0), "description: "+pj.Description)
+		// Fold embedded newlines to spaces so the emitted line stays
+		// single-line and does not shift following source-line counts.
+		// json.Unmarshal turns a JSON "\n" escape inside the string value
+		// into a REAL newline; without this fold place[li] becomes
+		// multi-line, Content embeds the newline, and ScanAll's line-based
+		// scan reports the description's tail and every later keyword at the
+		// wrong source line. Mirrors loadPyMetadata (internal/scan/python.go).
+		put(jsonKeyLine(src, "description", 0), "description: "+strings.ReplaceAll(pj.Description, "\n", " "))
 	}
 	// Anchor keyword search to the "keywords" array region so a keyword whose
 	// text coincides with an earlier JSON key name is not mis-mapped, and scan
@@ -213,7 +220,10 @@ func loadPackageJSONProse(path, root, label string) *File {
 		} else {
 			cursor = next
 		}
-		put(li, "keyword: "+kw)
+		// Same fold as the description above: keep each keyword prose line
+		// single-line so an embedded "\n" in a keyword value cannot shift
+		// later source-line counts.
+		put(li, "keyword: "+strings.ReplaceAll(kw, "\n", " "))
 	}
 	if maxIdx < 0 {
 		return nil
