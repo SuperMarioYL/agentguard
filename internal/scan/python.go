@@ -213,14 +213,25 @@ func loadPyMetadata(metaDir, root, label string) *File {
 	var (
 		path string
 		data []byte
-		err  error
 	)
 	for _, c := range candidates {
-		data, err = os.ReadFile(c)
-		if err == nil {
-			path = c
-			break
+		// Guard like loadProseFile (internal/scan/walker.go): a METADATA that
+		// is a symlink to a character device such as /dev/zero, or simply an
+		// oversized file, must not be read wholesale — os.ReadFile never sees
+		// EOF on /dev/zero and grows the buffer until OOM, and an oversized
+		// METADATA hangs or OOM-crashes the scanner on a single package. Skip
+		// non-regular files and files larger than maxProseBytes.
+		info, err := os.Stat(c)
+		if err != nil || !info.Mode().IsRegular() || info.Size() > maxProseBytes {
+			continue
 		}
+		b, err := os.ReadFile(c)
+		if err != nil {
+			continue
+		}
+		path = c
+		data = b
+		break
 	}
 	if path == "" {
 		return nil
@@ -490,26 +501,41 @@ func extractPyDocstrings(path string) []pyDocstring {
 		lineNo++
 		line := br.Text()
 		if !inString {
-			m := pyDocstringDelim.FindStringSubmatchIndex(line)
-			if m == nil {
-				continue
-			}
-			quote = line[m[4]:m[5]]
-			rest := line[m[5]:]
-			current = &pyDocstring{}
-			if closeIdx := strings.Index(rest, quote); closeIdx >= 0 {
-				body := rest[:closeIdx]
-				if strings.TrimSpace(body) != "" {
-					appendBody(body)
-					out = append(out, *current)
+			// A single physical line may carry more than one triple-quoted
+			// string (e.g. X = """benign""" """delete all data"""). The old
+			// single-line-close branch captured the first """...""" on the
+			// line and then `continue`d, never examining the remainder of that
+			// line for a second triple-quoted string, so a payload in a second
+			// same-line string was never emitted into File content and slipped
+			// every detector — a false-negative evasion. Loop over the line:
+			// find an opener, capture a single-line body (or open a multi-line
+			// string), then advance past the closer and re-scan the REST of
+			// the same line for another opener instead of dropping it.
+			rest := line
+			for {
+				m := pyDocstringDelim.FindStringSubmatchIndex(rest)
+				if m == nil {
+					break
 				}
-				current = nil
-				continue
+				quote = rest[m[4]:m[5]]
+				after := rest[m[5]:]
+				current = &pyDocstring{}
+				if closeIdx := strings.Index(after, quote); closeIdx >= 0 {
+					body := after[:closeIdx]
+					if strings.TrimSpace(body) != "" {
+						appendBody(body)
+						out = append(out, *current)
+					}
+					current = nil
+					rest = after[closeIdx+len(quote):]
+					continue
+				}
+				if strings.TrimSpace(after) != "" {
+					appendBody(after)
+				}
+				inString = true
+				break
 			}
-			if strings.TrimSpace(rest) != "" {
-				appendBody(rest)
-			}
-			inString = true
 			continue
 		}
 		if closeIdx := strings.Index(line, quote); closeIdx >= 0 {

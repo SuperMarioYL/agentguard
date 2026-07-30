@@ -19,6 +19,26 @@ import (
 //	node_modules/@scope/<pkg>/...
 //	node_modules/<pkg>/node_modules/<dup>/...  (npm de-duplication leftover)
 func walkNodeModules(dir, root string) ([]File, error) {
+	return walkNodeModulesVis(dir, root, make(map[string]struct{}))
+}
+
+// walkNodeModulesVis is the cycle-safe core of walkNodeModules. visited keys
+// the set of real directories (filepath.EvalSymlinks-resolved) already scanned,
+// so a node_modules that resolves back to an ancestor already walked is skipped
+// instead of re-entered. This is defense-in-depth over the os.Lstat guard in
+// nestedNodeModules: it keeps the walk cycle-safe even if a future caller passes
+// a symlinked entry dir, and bounds the recursion for any nested node_modules
+// that still resolves to a visited real path.
+func walkNodeModulesVis(dir, root string, visited map[string]struct{}) ([]File, error) {
+	key, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		key = dir
+	}
+	if _, seen := visited[key]; seen {
+		return nil, nil
+	}
+	visited[key] = struct{}{}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("scan/node: read %q: %w", dir, err)
@@ -46,27 +66,37 @@ func walkNodeModules(dir, root string) ([]File, error) {
 				}
 				sub := filepath.Join(pkgDir, s.Name())
 				out = append(out, extractNodePackage(sub, root, name+"/"+s.Name())...)
-				if nested, err := nestedNodeModules(sub, root); err == nil {
+				if nested, err := nestedNodeModules(sub, root, visited); err == nil {
 					out = append(out, nested...)
 				}
 			}
 			continue
 		}
 		out = append(out, extractNodePackage(pkgDir, root, name)...)
-		if nested, err := nestedNodeModules(pkgDir, root); err == nil {
+		if nested, err := nestedNodeModules(pkgDir, root, visited); err == nil {
 			out = append(out, nested...)
 		}
 	}
 	return out, nil
 }
 
-func nestedNodeModules(pkgDir, root string) ([]File, error) {
+func nestedNodeModules(pkgDir, root string, visited map[string]struct{}) ([]File, error) {
 	nm := filepath.Join(pkgDir, "node_modules")
-	info, err := os.Stat(nm)
+	// os.Lstat (not os.Stat) so a symlinked nested node_modules is NOT followed
+	// into. Real npm de-duplication nested node_modules are real directories
+	// and still pass IsDir; a symlink pointing at an ancestor (e.g. -> ../..)
+	// has mode ModeSymlink, IsDir() is false, and the recursion stops here.
+	// Without this guard a malicious package shipping
+	// node_modules/<pkg>/node_modules as a symlink to an ancestor containing
+	// <pkg> made walkNodeModules re-find <pkg>, re-enter nestedNodeModules,
+	// follow the symlink again, and loop forever — the path string grew
+	// without bound while the filesystem location cycled, exhausting the
+	// goroutine stack / memory on a single package (a trivial DoS).
+	info, err := os.Lstat(nm)
 	if err != nil || !info.IsDir() {
 		return nil, err
 	}
-	return walkNodeModules(nm, root)
+	return walkNodeModulesVis(nm, root, visited)
 }
 
 // extractNodePackage reads the three prose channels an npm consumer ships
@@ -151,7 +181,7 @@ func readPackageJSON(path string) (*packageJSON, error) {
 // to the field's real source line makes the npm channel consistent with them.
 func loadPackageJSONProse(path, root, label string) *File {
 	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxProseBytes {
 		return nil
 	}
 	data, err := os.ReadFile(path)
