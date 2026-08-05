@@ -298,27 +298,39 @@ func loadGoPackageDocs(modDir, root, label string) []File {
 			continue
 		}
 		gf := filepath.Join(modDir, name)
-		startLine, docLines := extractGoPackageComment(gf)
-		if len(docLines) == 0 {
+		blocks := extractGoPackageComment(gf)
+		if len(blocks) == 0 {
 			continue
 		}
 		var (
 			body  strings.Builder
 			lines []string
 		)
-		// Pad with empty lines up to the comment block's real start line so
-		// the detector's 1-based lineNo over Content matches the true .go
-		// source line, instead of counting from 1 over the stripped comment
-		// body (which reported every package-doc finding at an unnavigable
-		// line, e.g. real line 7 shown as foo.go:1).
-		for len(lines) < startLine-1 {
-			body.WriteString("\n")
-			lines = append(lines, "")
+		// Place each comment block's lines at the block's REAL source line
+		// so the detector's 1-based lineNo over Content matches the true .go
+		// source line, instead of counting from a single captured startLine
+		// (which drifted the package-doc payload when a multi-line `/* license
+		// */` header flushed before the `// Package` doc block, reporting the
+		// payload at the license line instead of its real source line).
+		// d.lines[0] sits on source line block.startLine, so body line j
+		// lands at Content index startLine-1+j; when a prior block already
+		// filled the target index the new line is joined in.
+		for _, b := range blocks {
+			for j, ln := range b.lines {
+				idx := b.startLine - 1 + j
+				for len(lines) <= idx {
+					lines = append(lines, "")
+				}
+				if lines[idx] == "" {
+					lines[idx] = ln
+				} else {
+					lines[idx] = lines[idx] + " " + ln
+				}
+			}
 		}
-		for _, ln := range docLines {
+		for _, ln := range lines {
 			body.WriteString(ln)
 			body.WriteString("\n")
-			lines = append(lines, ln)
 		}
 		rel, err := filepath.Rel(root, gf)
 		if err != nil {
@@ -337,21 +349,33 @@ func loadGoPackageDocs(modDir, root, label string) []File {
 	return out
 }
 
-// extractGoPackageComment returns the source line of the first comment
-// line and the text of the contiguous comment block (line or block style)
-// that immediately precedes the `package` keyword in a .go file.  Comment
-// markers are stripped so the detector sees prose, not syntax.  The
-// returned startLine lets loadGoPackageDocs pad the assembled Content so a
-// finding's reported line matches the real .go source line rather than an
-// index into the stripped comment body.
+// goCommentBlock is one contiguous comment block (line or block style)
+// immediately preceding the `package` clause, anchored to the real source
+// line of its first line so loadGoPackageDocs can place every block at its
+// own navigable line.
+type goCommentBlock struct {
+	startLine int
+	lines     []string
+}
+
+// extractGoPackageComment returns the contiguous comment blocks (line or
+// block style) that immediately precede the `package` keyword in a .go file,
+// each anchored to the source line of its first line.  Comment markers are
+// stripped so the detector sees prose, not syntax.  The per-block startLine
+// lets loadGoPackageDocs pad the assembled Content so a finding's reported
+// line matches the real .go source line rather than an index into the
+// stripped comment body — including the common license-header-then-package-doc
+// case where a multi-line `/* license */` header flushes before the `//
+// Package` doc block: capturing startLine only on the first flush (the old
+// behaviour) drifted the package-doc payload to the license line.
 //
 // Subsequent doc comments inside the file are ignored — those attach to
 // declarations, and m2's threat model is the package-level summary that
 // pkg.go.dev surfaces.
-func extractGoPackageComment(path string) (int, []string) {
+func extractGoPackageComment(path string) []goCommentBlock {
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, nil
+		return nil
 	}
 	defer func() { _ = f.Close() }()
 
@@ -359,12 +383,11 @@ func extractGoPackageComment(path string) (int, []string) {
 	br.Buffer(make([]byte, 0, 64*1024), 1<<20)
 
 	var (
-		comments  []string
-		buf       []string
-		inBlock   bool
-		lineNo    int
-		bufStart  int
-		startLine int
+		blocks   []goCommentBlock
+		buf      []string
+		inBlock  bool
+		lineNo   int
+		bufStart int
 	)
 	// add appends a stripped comment line to buf, recording the source line
 	// of the block's first line so the caller can anchor Content to it.
@@ -374,12 +397,14 @@ func extractGoPackageComment(path string) (int, []string) {
 		}
 		buf = append(buf, s)
 	}
-	// flush moves buf into comments, capturing startLine on the first flush.
+	// flush emits buf as its own comment block (carrying bufStart as the
+	// block's startLine) and resets buf.  Unlike the old single-startLine
+	// flush, each block keeps its own real source line so a multi-block
+	// header-then-doc file does not drift the package-doc line.
 	flush := func() {
-		if len(comments) == 0 && len(buf) > 0 {
-			startLine = bufStart
+		if len(buf) > 0 {
+			blocks = append(blocks, goCommentBlock{startLine: bufStart, lines: buf})
 		}
-		comments = append(comments, buf...)
 		buf = nil
 	}
 	for br.Scan() {
@@ -435,12 +460,12 @@ func extractGoPackageComment(path string) (int, []string) {
 		}
 		if strings.HasPrefix(trimmed, "package ") {
 			flush()
-			return startLine, comments
+			return blocks
 		}
 		// Hit an import or other declaration before the package
 		// clause — comments above that are unrelated to the package
 		// summary, so reset and keep scanning until package appears.
 		buf = nil
 	}
-	return startLine, comments
+	return blocks
 }

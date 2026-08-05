@@ -419,23 +419,42 @@ func loadPyDocstrings(pkgDir, root, label string) []File {
 			lines []string
 		)
 		for _, d := range docs {
-			// Pad with empty lines up to the docstring's real start line so
-			// the detector's 1-based lineNo over Content matches the true .py
+			// Place each docstring body line at its REAL source line so the
+			// detector's 1-based lineNo over Content matches the true .py
 			// source line.  d.lines[0] sits on source line d.startLine (the
-			// line carrying the opening triple-quote), so before writing this
-			// docstring's body we grow lines/body to length startLine-1.
-			// Without this the concatenated docstring body was scanned from
-			// line 1 and every finding pointed at an unnavigable location
-			// (e.g. a payload on real line 7 reported as foo.py:1).
-			for len(lines) < d.startLine-1 {
-				body.WriteString("\n")
-				lines = append(lines, "")
+			// line carrying the opening triple-quote), so body line j lands
+			// at Content index startLine-1+j.  Without this the concatenated
+			// docstring body was scanned from line 1 and every finding
+			// pointed at an unnavigable location (e.g. a payload on real
+			// line 7 reported as foo.py:1).
+			//
+			// Two triple-quoted strings sharing one physical line (e.g.
+			// `X = """benign""" """delete all user data"""`) both anchor
+			// startLine to that same source line, so the second docstring's
+			// body line targets the SAME Content index the first already
+			// filled.  JOIN the new body line into the existing entry instead
+			// of appending to the tail — without this the old assembler
+			// (pad-then-append) padded only up to startLine-1, which was a
+			// no-op once the first same-line docstring had grown lines past
+			// it, then appended the second body at the END of lines, so the
+			// second same-line docstring's payload reported one+ line too
+			// low.  Joining keeps every same-line payload at its real source
+			// line (the value prop §1/§2 the whole tool is about).
+			for j, ln := range d.lines {
+				idx := d.startLine - 1 + j
+				for len(lines) <= idx {
+					lines = append(lines, "")
+				}
+				if lines[idx] == "" {
+					lines[idx] = ln
+				} else {
+					lines[idx] = lines[idx] + " " + ln
+				}
 			}
-			for _, ln := range d.lines {
-				body.WriteString(ln)
-				body.WriteString("\n")
-				lines = append(lines, ln)
-			}
+		}
+		for _, ln := range lines {
+			body.WriteString(ln)
+			body.WriteString("\n")
 		}
 		rel, err := filepath.Rel(root, p)
 		if err != nil {
@@ -500,57 +519,68 @@ func extractPyDocstrings(path string) []pyDocstring {
 	for br.Scan() {
 		lineNo++
 		line := br.Text()
-		if !inString {
-			// A single physical line may carry more than one triple-quoted
-			// string (e.g. X = """benign""" """delete all data"""). The old
-			// single-line-close branch captured the first """...""" on the
-			// line and then `continue`d, never examining the remainder of that
-			// line for a second triple-quoted string, so a payload in a second
-			// same-line string was never emitted into File content and slipped
-			// every detector — a false-negative evasion. Loop over the line:
-			// find an opener, capture a single-line body (or open a multi-line
-			// string), then advance past the closer and re-scan the REST of
-			// the same line for another opener instead of dropping it.
-			rest := line
-			for {
-				m := pyDocstringDelim.FindStringSubmatchIndex(rest)
-				if m == nil {
-					break
+		if inString {
+			// Inside a multi-line triple-quoted string: look for the closer
+			// on this physical line.
+			if closeIdx := strings.Index(line, quote); closeIdx >= 0 {
+				body := line[:closeIdx]
+				if strings.TrimSpace(body) != "" {
+					appendBody(body)
 				}
-				quote = rest[m[4]:m[5]]
-				after := rest[m[5]:]
-				current = &pyDocstring{}
-				if closeIdx := strings.Index(after, quote); closeIdx >= 0 {
-					body := after[:closeIdx]
-					if strings.TrimSpace(body) != "" {
-						appendBody(body)
-						out = append(out, *current)
-					}
-					current = nil
-					rest = after[closeIdx+len(quote):]
-					continue
+				if len(current.lines) > 0 {
+					out = append(out, *current)
 				}
-				if strings.TrimSpace(after) != "" {
-					appendBody(after)
-				}
-				inString = true
+				current = nil
+				inString = false
+				// The text AFTER the closing quote may itself open another
+				// triple-quoted string on the SAME physical line (e.g.
+				// `line"""; y = """delete all user data"""`), which the old
+				// code dropped by `continue`-ing past it — a false-negative
+				// evasion symmetric to the single-line-close re-scan below.
+				// Slice the remainder after the closer and fall through into
+				// the opener loop so a subsequent opener on the same line is
+				// captured instead of dropped.
+				line = line[closeIdx+len(quote):]
+			} else {
+				appendBody(line)
+				continue
+			}
+		}
+		// A single physical line may carry more than one triple-quoted
+		// string (e.g. X = """benign""" """delete all data"""). The old
+		// single-line-close branch captured the first """...""" on the
+		// line and then `continue`d, never examining the remainder of that
+		// line for a second triple-quoted string, so a payload in a second
+		// same-line string was never emitted into File content and slipped
+		// every detector — a false-negative evasion. Loop over the line:
+		// find an opener, capture a single-line body (or open a multi-line
+		// string), then advance past the closer and re-scan the REST of
+		// the same line for another opener instead of dropping it.
+		rest := line
+		for {
+			m := pyDocstringDelim.FindStringSubmatchIndex(rest)
+			if m == nil {
 				break
 			}
-			continue
-		}
-		if closeIdx := strings.Index(line, quote); closeIdx >= 0 {
-			body := line[:closeIdx]
-			if strings.TrimSpace(body) != "" {
-				appendBody(body)
+			quote = rest[m[4]:m[5]]
+			after := rest[m[5]:]
+			current = &pyDocstring{}
+			if closeIdx := strings.Index(after, quote); closeIdx >= 0 {
+				body := after[:closeIdx]
+				if strings.TrimSpace(body) != "" {
+					appendBody(body)
+					out = append(out, *current)
+				}
+				current = nil
+				rest = after[closeIdx+len(quote):]
+				continue
 			}
-			if len(current.lines) > 0 {
-				out = append(out, *current)
+			if strings.TrimSpace(after) != "" {
+				appendBody(after)
 			}
-			current = nil
-			inString = false
-			continue
+			inString = true
+			break
 		}
-		appendBody(line)
 	}
 	return out
 }
