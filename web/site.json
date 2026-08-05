@@ -70,5 +70,11 @@
       "zh": "Coding Agent 时代，看住依赖里藏着的指令",
       "en": "Watching the instructions hidden in your dependencies — for the coding-agent era"
     }
+  },
+  "meta": {
+    "source_version": "v0.11.0",
+    "content_version": 2,
+    "generated_at": "2026-08-05",
+    "web_factory_ref": "v1.1"
   }
 }
