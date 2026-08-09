@@ -19,6 +19,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
+	"github.com/SuperMarioYL/agentguard/internal/config"
 	"github.com/SuperMarioYL/agentguard/internal/detect"
 	"github.com/SuperMarioYL/agentguard/internal/report"
 	"github.com/SuperMarioYL/agentguard/internal/scan"
@@ -136,6 +137,16 @@ func runCheck(stdout, stderr io.Writer, root string, opts *checkOptions) error {
 		return fmt.Errorf("load corpus: %w", err)
 	}
 
+	// Load the optional per-project config (.agentguard.yaml at the scan
+	// root). A missing file is a no-op (every corpus rule stays active); a
+	// malformed file fails the scan so a typo does not silently weaken the
+	// gate. Disabled rule IDs are suppressed before the reporter renders
+	// findings, so they never reach the rendered report.
+	cfg, err := config.Load(root)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
 	// Walk returns the FULL file set (ChangedOnly is not set on the walk)
 	// so the baseline can cover every package.  The scan is narrowed
 	// separately: filter against the PRE-EXISTING baseline first, then write
@@ -175,6 +186,10 @@ func runCheck(stdout, stderr io.Writer, root string, opts *checkOptions) error {
 	if err != nil {
 		return fmt.Errorf("detect: %w", err)
 	}
+	// Apply per-project rule suppression and severity overrides before the
+	// severity floor so a disabled rule produces nothing and a downgraded
+	// rule can fall below the gate.
+	findings = detect.Suppress(findings, *cfg)
 	findings = detect.FilterMinSeverity(findings, minSev)
 
 	out, closer, err := openOutput(opts.output, stdout)

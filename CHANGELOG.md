@@ -9,9 +9,73 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 - Cargo and RubyGems ecosystem walkers.
 - `action.yml` GitHub Action wrapper so `agentguard` runs natively in workflows.
-- Per-project rule disable list at `.agentguard.yaml` (allowlists, severity overrides).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
+
+## [0.12.0] — 2026-08-10
+
+Extraction hardening + per-project config release. Two source-audit fixes
+close silent false-negatives in the Python docstring and Go package-comment
+extractors (the same class of extraction bug hunted since v0.5.0), and a new
+`.agentguard.yaml` project config lets a repo suppress benign rule matches
+without weakening the static 30-rule corpus.
+
+### Fixed
+
+- **The Python and Go extractors no longer abort on a >1 MiB physical line**
+  (`internal/scan/python.go`, `internal/scan/gomod.go`, milestone
+  `fix-extract-long-line-tolerance`). `extractPyDocstrings` and
+  `extractGoPackageComment` used default `bufio.ScanLines` with a 1 MiB max
+  buffer, so a single physical line longer than 1 MiB caused
+  `bufio.ErrTooLong`: `scanner.Scan()` returned false, the scan loop exited,
+  and every docstring or comment block AFTER the over-long line was silently
+  dropped — never reaching `File.Content` so no rule could match it. The
+  detector (`internal/detect/patterns.go`) already solved this in v0.5.0 with
+  the `newSplitLongTolerant` split function; that split function is now shared
+  (moved to `internal/scan/scanlines.go` as `scan.NewSplitLongTolerant`) and
+  applied to both extractors, so an over-long line is rune-safely truncated and
+  scanning continues, preserving line-number fidelity. Regression:
+  `TestExtractPyDocstringsOverLongLineKeepsLaterDocstring`,
+  `TestExtractGoPackageCommentOverLongLineKeepsLaterComment`,
+  `TestScanAllPyDocstringAfterOverLongLineReported`,
+  `TestScanAllGoCommentAfterOverLongLineReported` (all fail under v0.8.0
+  default ScanLines).
+
+- **A single-line `/* body */` Go package comment followed by a blank line is
+  no longer dropped** (`internal/scan/gomod.go`, milestone
+  `fix-go-single-line-block-comment-flush`). `extractGoPackageComment`'s
+  single-line block-comment branch found the closing `*/` on the same line,
+  added the body to `buf`, and continued WITHOUT calling `flush()`; the next
+  blank line then did `buf = nil` (since `inBlock` is false), silently
+  discarding the comment body. Multi-line `/* ... */` blocks did not have this
+  problem because their `*/` closer called `flush()`. The single-line closer
+  now calls `flush()` too, making both paths symmetric and emitting the block
+  immediately. Regression: `TestExtractGoPackageCommentSingleLineBlockFlushedBeforeBlank`,
+  `TestScanAllGoSingleLineBlockCommentBeforeBlankReported` (fail under v0.11.0).
+
+### Added
+
+- **Per-project `.agentguard.yaml` config for rule disable lists, allowlists,
+  and severity overrides** (`internal/config`, `internal/detect`, milestone
+  `add-project-config-file`). A repo drops a `.agentguard.yaml` at the scan
+  root; it is loaded at scan start and applied to findings before the reporter
+  renders them, so disabled rule IDs never reach the rendered report. `disable`
+  suppresses a rule's findings entirely; `allow` (when non-empty) keeps only
+  the allowlisted rule IDs; `severity` re-weights a rule's tier before the
+  `--severity` floor so a noisy high rule can be downgraded to low and kept out
+  of the CI gate. Matching is case-insensitive; a malformed file or unknown
+  severity value fails the scan loudly (fail closed) so a typo cannot silently
+  weaken the gate. A missing `.agentguard.yaml` is a no-op — every corpus rule
+  stays active (all 30 rules), so behaviour is backward-compatible. Example
+  schema: `examples/.agentguard.yaml`. Regression: `TestLoadMissingReturnsEmpty`,
+  `TestLoadParsesDisableAllowSeverity`, `TestLoadMalformedReturnsError`,
+  `TestLoadInvalidSeverityReturnsError`, `TestSuppressDisabledRuleDropped`,
+  `TestSuppressAllowlistKeepsOnlyAllowed`, `TestSuppressSeverityOverrideApplied`,
+  `TestSuppressSeverityOverrideBeforeFloor`, `TestScanAllThenSuppressFromConfigFileEndToEnd`.
+
+### Changed
+
+- Bumped VERSION `0.11.0` → `0.12.0`.
 
 ## [0.9.0] — 2026-07-26
 

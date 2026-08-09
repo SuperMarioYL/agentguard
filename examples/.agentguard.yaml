@@ -1,0 +1,36 @@
+# .agentguard.yaml — per-project rule overrides for agentguard.
+#
+# Drop this file at the root of the directory you scan with
+# `agentguard check .` to mute or re-weight benign rule matches for THIS
+# project only. The global, static 30-rule corpus that ships with the binary
+# is never weakened; a config only filters this project's findings before
+# the report is rendered.
+#
+# A MISSING .agentguard.yaml is a no-op: every corpus rule stays active and
+# behaviour is identical to a scan with no project file. So add only the
+# overrides you need.
+#
+# All rule-ID matches are case-insensitive. The rule IDs are the AG-series
+# ids printed by `agentguard check` (e.g. AG004-ignore-previous-instructions).
+
+# disable: rule IDs whose findings are suppressed entirely. A disabled rule
+# produces no finding regardless of severity. Use this to mute a rule that
+# fires on a pattern this project considers benign.
+disable:
+  # - AG005-conditional-on-ai-reader
+
+# allow: an allowlist of rule IDs. When non-empty, ONLY findings whose rule
+# ID appears here are reported; every other rule is suppressed. Leave this
+# list empty (or omit it) to keep all non-disabled rules active.
+allow:
+  # - AG001-address-coding-agent
+  # - AG002-destructive-imperative
+  # - AG004-ignore-previous-instructions
+
+# severity: per-rule severity overrides. Keys are rule IDs; values are one of
+# low | medium | high. An override is applied before the --severity floor, so
+# a project can downgrade a noisy high rule to low and keep it out of the CI
+# gate, or upgrade a rule it cares about to high.
+severity:
+  # AG004-ignore-previous-instructions: low
+  # AG001-address-coding-agent: high

@@ -380,7 +380,16 @@ func extractGoPackageComment(path string) []goCommentBlock {
 	defer func() { _ = f.Close() }()
 
 	br := bufio.NewScanner(f)
-	br.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	br.Buffer(make([]byte, 0, 64*1024), MaxScanLineBytes)
+	// A single physical line longer than MaxScanLineBytes (e.g. a >1 MiB
+	// minified blob) must not abort the scan and silently drop every
+	// package-comment block after it — the same false-negative class
+	// ScanAll guards against.  The shared long-line-tolerant split
+	// truncates an over-long line to a rune-safe prefix and keeps
+	// scanning, so a payload comment after an over-long line is still
+	// extracted, and lineNo stays faithful to the source (the over-long
+	// line counts as exactly one logical line).
+	br.Split(NewSplitLongTolerant())
 
 	var (
 		blocks   []goCommentBlock
@@ -449,6 +458,13 @@ func extractGoPackageComment(path string) []goCommentBlock {
 				if body != "" {
 					add(body)
 				}
+				// A single-line /* body */ block finds its closer on the
+				// same line and must be emitted immediately — matching the
+				// multi-line closer path, which calls flush() at its */.
+				// Without this, the body sits in buf until the next blank
+				// line, whose handler does buf = nil (inBlock is false),
+				// silently discarding the whole comment body.
+				flush()
 				continue
 			}
 			body := strings.TrimSpace(rest)

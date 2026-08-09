@@ -492,7 +492,15 @@ func extractPyDocstrings(path string) []pyDocstring {
 	defer func() { _ = f.Close() }()
 
 	br := bufio.NewScanner(f)
-	br.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	br.Buffer(make([]byte, 0, 64*1024), MaxScanLineBytes)
+	// A single physical line longer than MaxScanLineBytes (e.g. a >1 MiB
+	// minified blob) must not abort the scan and silently drop every
+	// docstring after it — the same false-negative class ScanAll guards
+	// against.  The shared long-line-tolerant split truncates an over-long
+	// line to a rune-safe prefix and keeps scanning, so a payload docstring
+	// after an over-long line is still extracted, and lineNo stays faithful
+	// to the source (the over-long line counts as exactly one logical line).
+	br.Split(NewSplitLongTolerant())
 
 	var (
 		out      []pyDocstring
