@@ -3,10 +3,18 @@
   "name": "agentguard",
   "github": "https://github.com/SuperMarioYL/agentguard",
   "host": "agentguard.lei6393.com",
-  "lang": { "primary": "zh", "toggle": true },
-  "accent": ["#d8542f"],
+  "lang": {
+    "primary": "zh",
+    "toggle": true
+  },
+  "accent": [
+    "#d8542f"
+  ],
   "hero": {
-    "eyebrow": { "zh": "装包前就告诉你 · 离线 · 不要 key", "en": "Answered before you install · offline · no key" },
+    "eyebrow": {
+      "zh": "装包前就告诉你 · 离线 · 不要 key",
+      "en": "Answered before you install · offline · no key"
+    },
     "headline": {
       "zh": "在你的 agent 读进依赖之前\n揪出藏着的有害指令",
       "en": "Before your agent reads a dependency\ncatch the harmful instructions hidden inside"
@@ -16,44 +24,76 @@
       "en": "A dependency's README, CHANGELOG or docstring may hide imperatives written for your coding agent — «delete all files», «ignore previous instructions», «if you are an AI…». agentguard lists every one before you install or run a refactor — down to the exact file and line. Runs locally, no API key."
     },
     "command": "agentguard check .",
-    "cta": { "zh": "开始使用", "en": "Get started" },
-    "ctaGithub": { "zh": "在 GitHub 查看", "en": "View on GitHub" }
+    "cta": {
+      "zh": "开始使用",
+      "en": "Get started"
+    },
+    "ctaGithub": {
+      "zh": "在 GitHub 查看",
+      "en": "View on GitHub"
+    }
   },
   "advantages": [
     {
-      "title": { "zh": "看的是 agent 真会读的那段文字", "en": "It reads the words your agent actually reads" },
+      "title": {
+        "zh": "看的是 agent 真会读的那段文字",
+        "en": "It reads the words your agent actually reads"
+      },
       "body": {
         "zh": "Snyk、Socket、OSV-Scanner 把三方包当「可执行代码 + 已知漏洞」来查；可你的 Coding Agent 真正吃进上下文的，是 README、CHANGELOG、docstring 这些写给人看的文字。agentguard 只盯这部分——它扫的不是源码，是 agent 会读到的文字。这条暗道，以前没人看。",
         "en": "Snyk, Socket and OSV-Scanner treat a package as «executable code + known CVEs». But what your coding agent actually pulls into context is the README, the CHANGELOG, the docstring — the words written for humans. agentguard looks only there: not source code, just the text your agent reads. It's the back door nobody was watching."
       },
-      "chips": ["› README · CHANGELOG · docstring", "› 不碰源码"]
+      "chips": [
+        "› README · CHANGELOG · docstring",
+        "› 不碰源码"
+      ]
     },
     {
-      "title": { "zh": "本地跑、不联网，结果每次都一样", "en": "Runs locally, no network, same result every time" },
+      "title": {
+        "zh": "本地跑、不联网，结果每次都一样",
+        "en": "Runs locally, no network, same result every time"
+      },
       "body": {
         "zh": "不调外部模型、不联网、零 API key——所以同一条命令每次跑出同样的结果，误报能一条条核对，CI 里能完整重放。你的代码也不出本机。",
         "en": "No external model, no network, zero API keys — so the same command gives the same result every run, false positives are checkable one by one, and CI replays end to end. Your code never leaves your machine."
       },
-      "chips": ["› 不联网 · 不要 key", "› 每次结果一致"]
+      "chips": [
+        "› 不联网 · 不要 key",
+        "› 每次结果一致"
+      ]
     },
     {
-      "title": { "zh": "一条命令当 CI 闸门", "en": "One command gates your CI" },
+      "title": {
+        "zh": "一条命令当 CI 闸门",
+        "en": "One command gates your CI"
+      },
       "body": {
         "zh": "命中高危指令时默认让 CI 失败，一条 agentguard check 就能挡住一次有问题的合并。报告还能导出成 GitHub 安全视图和 VS Code 直接打开的标准格式——不用换工具栈。",
         "en": "When it finds a high-severity directive it fails CI by default — one agentguard check blocks a risky merge. The report also exports to the standard format GitHub's security view and VS Code open natively — no toolchain switch."
       },
-      "chips": ["› 命中即挡合并", "› 进 GitHub 安全视图"]
+      "chips": [
+        "› 命中即挡合并",
+        "› 进 GitHub 安全视图"
+      ]
     },
     {
-      "title": { "zh": "npm · PyPI · Go 一次扫全", "en": "npm, PyPI, Go — all in one pass" },
+      "title": {
+        "zh": "npm · PyPI · Go 一次扫全",
+        "en": "npm, PyPI, Go — all in one pass"
+      },
       "body": {
         "zh": "前端、Python、Go 的依赖树一次过；之后只复查内容真正变过的包，CI 不会每次从头重扫整棵树。",
         "en": "Front-end, Python and Go dependency trees in one pass; afterwards it re-checks only the packages whose contents actually changed, so CI never rescans the whole tree from scratch."
       },
-      "chips": ["› npm · PyPI · Go", "› 只复查变过的包"]
+      "chips": [
+        "› npm · PyPI · Go",
+        "› 只复查变过的包"
+      ]
     }
   ],
-  "scene": { "kind": "particle-field" },
+  "scene": {
+    "kind": "particle-field"
+  },
   "cta": {
     "headline": {
       "zh": "供应链扫描器只看代码和 CVE；可你的 agent 读的是包里的文字",
@@ -63,7 +103,10 @@
       "zh": "开源、Apache-2.0、无付费墙。一条命令就能在 CI 里把这条暗道堵死。",
       "en": "Open source, Apache-2.0, no paywall. One command closes this back door right in your CI."
     },
-    "button": { "zh": "在 GitHub 上开始", "en": "Get started on GitHub" }
+    "button": {
+      "zh": "在 GitHub 上开始",
+      "en": "Get started on GitHub"
+    }
   },
   "footer": {
     "tag": {
@@ -76,5 +119,6 @@
     "content_version": 2,
     "generated_at": "2026-08-05",
     "web_factory_ref": "v1.1"
-  }
+  },
+  "content_version": "v0.12.0"
 }
