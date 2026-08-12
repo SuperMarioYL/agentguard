@@ -120,5 +120,13 @@
     "generated_at": "2026-08-05",
     "web_factory_ref": "v1.1"
   },
-  "content_version": "v0.12.0"
+  "content_version": "v0.13.0",
+  "generated_at": "2026-08-12T19:47:05Z",
+  "changelog": [
+    {
+      "version": "v0.13.0",
+      "zh": "扫描符号链接根目录不再静默丢弃整棵依赖树（walk 前先用 EvalSymlinks 解析根）。H002 启发式与语料 AG005 现在能匹配 \"if/when you're an AI\" 缩写——此前不可达的 '?re 死分支已修复。",
+      "en": "Scanning a symlinked root no longer silently drops the entire dependency tree (EvalSymlinks resolves the root before the walk). The H002 heuristic and corpus AG005 now match \"if/when you're an AI\" contractions — the dead '?re branch is fixed."
+    }
+  ]
 }
