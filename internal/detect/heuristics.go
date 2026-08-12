@@ -47,10 +47,15 @@ var agentRefRE = regexp.MustCompile(`(?i)\b(ai|llm|language model|coding agent|c
 var destructiveVerbRE = regexp.MustCompile(`(?i)\b(delete|remove|wipe|nuke|drop|destroy|erase|truncate|purge|exfiltrate|leak|send|upload|post|paste|format|reformat|shred|unlink|rm\s+-rf)\b`)
 
 // conditionalAgentReaderRE matches the structural "if/when you are an
-// AI" guard.  Used by the H002 heuristic, which additionally requires an
-// imperative on the same line so pure tagging ("this README is for the
-// AI reader too") does not trip it.
-var conditionalAgentReaderRE = regexp.MustCompile(`(?i)\b(if|when)\s+you\s+(are|'?re)\s+(an?\s+)?(ai|llm|language model|coding (assistant|agent)|assistant|chatbot|automated|claude|cursor|copilot|codex|agent)\b`)
+// AI" guard, including the "you're" contraction.  Used by the H002
+// heuristic, which additionally requires an imperative on the same line so
+// pure tagging ("this README is for the AI reader too") does not trip it.
+//
+// The verb group is `(\s+are|'re)` rather than `\s+(are|'?re)`: a
+// contraction like "you're" has no space before the apostrophe, so the
+// old `'?re` alternative (behind a mandatory `\s+`) was unreachable dead
+// code — "If/When you're an AI" was a complete false negative.
+var conditionalAgentReaderRE = regexp.MustCompile(`(?i)\b(if|when)\s+you(\s+are|'re)\s+(an?\s+)?(ai|llm|language model|coding (assistant|agent)|assistant|chatbot|automated|claude|cursor|copilot|codex|agent)\b`)
 
 // softImperativeRE complements destructiveVerbRE with non-destructive
 // verbs an attacker would still ask the agent to perform conditionally —

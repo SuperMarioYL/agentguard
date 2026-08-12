@@ -168,6 +168,41 @@ func TestWalkRejectsMissingRoot(t *testing.T) {
 	}
 }
 
+// TestWalkSymlinkedRootScansDependencyTree guards
+// fix-symlinked-root-drops-dependency-scan: when opts.Root is a symlink to a
+// real project tree, filepath.WalkDir Lstats the root and sees a symlink (not
+// a directory), so the `!d.IsDir()` guard skipped all recursion — no
+// node_modules / .venv / vendor enumerator ever fired and the entire
+// dependency tree (the only surface this scanner exists to audit) was
+// silently unscanned, the run exiting 0 with at most a top-level README.  The
+// root must be resolved through symlinks before walking so WalkDir sees the
+// real directory and recurses normally.
+func TestWalkSymlinkedRootScansDependencyTree(t *testing.T) {
+	real := testdataPath(t, "node_modules_fixture")
+	dir := t.TempDir()
+	link := filepath.Join(dir, "linked_root")
+	if err := os.Symlink(real, link); err != nil {
+		// Some CI sandboxes forbid symlink creation; skip rather than fail.
+		if os.IsPermission(err) {
+			t.Skipf("cannot create symlink: %v", err)
+		}
+		t.Fatalf("symlink %q -> %q: %v", link, real, err)
+	}
+
+	files, err := Walk(Options{Root: link})
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatal("Walk on a symlinked root returned zero files — the dependency tree was silently unscanned")
+	}
+	// The npm enumerator must have reached node_modules and extracted the
+	// jqwik package prose, proving recursion proceeded past the root.
+	if !anyHasSuffix(files, "node_modules/jqwik/README.md") {
+		t.Fatalf("expected jqwik README under node_modules to be scanned through the symlink; got: %v", displayPaths(files))
+	}
+}
+
 // TestChangedOnlyNarrowsScan guards fix-changed-only-noop: a full scan
 // followed by a baseline write, then a --changed-only re-scan, must drop the
 // packages whose prose is unchanged and keep only those that changed.

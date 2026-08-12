@@ -201,9 +201,25 @@ func Walk(opts Options) ([]File, error) {
 		return nil, fmt.Errorf("scan: %q is not a directory", opts.Root)
 	}
 
-	rootAbs, err := filepath.Abs(opts.Root)
+	// Resolve the root through symlinks before walking.  filepath.WalkDir
+	// Lstats the root entry: when opts.Root is a symlink to a real project
+	// tree, the root is seen as a symlink (d.IsDir() is false) and the
+	// `!d.IsDir()` guard below skips all recursion — no
+	// node_modules / .venv / vendor enumerator ever fires, so the entire
+	// dependency tree (the only surface this scanner exists to audit) is
+	// silently unscanned and the run exits 0 with at most a top-level
+	// README.  os.Stat above already follows the symlink and accepts a
+	// symlinked root as valid input, so the walk must resolve it too.
+	// DisplayPaths stay identical: they are computed relative to the
+	// resolved root and the symlink points at the whole real tree.  Fall
+	// back to Abs only when EvalSymlinks itself fails (e.g. a race between
+	// the stat above and resolution); the stat already validated the root.
+	rootAbs, err := filepath.EvalSymlinks(opts.Root)
 	if err != nil {
-		return nil, fmt.Errorf("scan: abs %q: %w", opts.Root, err)
+		rootAbs, err = filepath.Abs(opts.Root)
+		if err != nil {
+			return nil, fmt.Errorf("scan: abs %q: %w", opts.Root, err)
+		}
 	}
 
 	wants := func(eco string) bool {

@@ -100,7 +100,7 @@ rules:
     references:
       - "https://nesbitt.io/2026/05/28/protestware-for-coding-agents.html"
     patterns:
-      - regex: '\b(if\s+you\s+(are|''re)|when\s+you\s+are)\s+(an?\s+)?(ai|llm|language\s+model|coding\s+assistant|coding\s+agent|chatbot|automated\s+system|claude|cursor|copilot|codex)[^.]{0,160}\b(do|run|execute|delete|send|reply|respond|ignore|skip|insert|add|use|please)\b'
+      - regex: '\b(if\s+you(\s+are|''re)|when\s+you(\s+are|''re))\s+(an?\s+)?(ai|llm|language\s+model|coding\s+assistant|coding\s+agent|chatbot|automated\s+system|claude|cursor|copilot|codex)[^.]{0,160}\b(do|run|execute|delete|send|reply|respond|ignore|skip|insert|add|use|please)\b'
       - regex: '\b(only|just)\s+if\s+you\s+are\s+(an?\s+)?(ai|llm|agent|assistant)\b'
 
   # ── AG006 — Tool / shell execution ask ────────────────────────────────────
