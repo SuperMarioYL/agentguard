@@ -346,7 +346,15 @@ func splitPyMetadata(body string) (map[string]string, map[string]int, int, strin
 		desc = strings.Join(lines[idx:], "\n")
 		descStart = idx
 	}
-	if d, ok := headers["Description"]; ok && desc == "" {
+	// Gate the legacy `Description:` header fallback on the TRIMMED body
+	// being empty, not the raw joined string. When a METADATA file has a
+	// `Description:` header but no free-form body and 2+ trailing blank
+	// lines, lines[idx:] is all empty strings, so desc joins to "\n"
+	// (non-empty) — the old `desc == ""` gate skipped the fallback, and
+	// TrimRight(desc, "\n") then yielded "", so neither body nor header was
+	// emitted (a silent false negative). Treat a whitespace-only body as
+	// absent so the Description header value is used.
+	if d, ok := headers["Description"]; ok && strings.TrimSpace(desc) == "" {
 		desc = d
 		if li, ok := headerLine["Description"]; ok {
 			descStart = li

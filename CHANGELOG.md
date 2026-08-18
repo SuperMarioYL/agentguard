@@ -12,6 +12,76 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.14.0] — 2026-08-19
+
+Grill bug-hunt release. Three source-audit fixes from a fresh bug-hunter
+audit of the shipped Go source, all closing silent false-negatives or
+false-positives in the Go vendor-tree, Go package-comment, and Python
+metadata extractors — the same extraction-correctness surface hunted since
+v0.5.0. No new detector rules, ecosystems, or CLI surface.
+
+### Fixed
+
+- **Confine vendor/modules.txt import paths to the vendor tree (path
+  injection)** (`internal/scan/gomod.go`, milestone
+  `fix-vendor-modules-txt-path-traversal`). `findVendorPackageDirs` parsed
+  `vendor/modules.txt` and fed each bare (non-`#`) line through
+  `filepath.Join(dir, filepath.FromSlash(line))` with no containment check.
+  `filepath.Join` cleans `..` segments, so a crafted line such as
+  `../external` (or an absolute path) resolved to a real directory OUTSIDE the
+  vendor scan root; `add()` then `os.Stat`'d that external dir and, if it was a
+  directory, handed it to `extractGoModule`, which read README / `.go`
+  package-comment prose from outside the declared scan root and reported it as
+  findings — breaking the scanner's trust boundary on a supply-chain scanner
+  whose threat model is untrusted dependency trees. After the fix the joined
+  path is resolved and `filepath.Rel(dir, resolved)` is checked: entries whose
+  relative path starts with `..` (or whose line is absolute) are skipped, so
+  only legitimate import paths like `example.com/owner/pkg` are scanned.
+  Regression: `TestWalkVendorModulesTxtRejectsPathTraversal` (fails under
+  v0.12.0).
+
+- **Stop the package-comment scan at `package` even when it shares a line
+  with a `*/` closer** (`internal/scan/gomod.go`, milestone
+  `fix-go-package-clause-same-line-as-block-closer`). In
+  `extractGoPackageComment`, when a `*/` closer was found — the multi-line
+  closer branch OR the single-line `/* body */` branch — the code called
+  `flush()` and `continue`d to the next physical line without inspecting the
+  remainder of the CURRENT line for the `package` keyword. The `package` check
+  only fired for lines whose trimmed form STARTS with `package `, so a `.go`
+  file where `package <name>` shared a physical line with a block-comment
+  closer (e.g. `/* license */ package foo` or `*/ package foo`) never returned
+  at the package clause: the function scanned the rest of the file and,
+  because block comments flush on their own closer, captured in-function
+  `/* ... */` comments as package-doc blocks — false-positive findings for
+  comments outside the declared package-doc scan surface. After the fix, after
+  a `*/` closer is consumed the remainder of that same line is re-checked for
+  the `package` clause (and the scan halts) before `continue`-ing, so the scan
+  halts at the real package clause just as it does when `package` sits on its
+  own line. Regression: `TestExtractGoPackageCommentPackageSameLineAsSingleLineCloser`,
+  `TestExtractGoPackageCommentPackageSameLineAsMultilineCloser` (fail under
+  v0.12.0).
+
+- **Do not drop the legacy `Description:` header when the METADATA body is
+  just trailing blank lines** (`internal/scan/python.go`, milestone
+  `fix-py-metadata-description-header-trailing-blanks`). `splitPyMetadata` set
+  `desc = strings.Join(lines[idx:], "\n")` (the free-form body after the first
+  blank line) and only fell back to the legacy `Description:` header when
+  `desc == ""`. When a METADATA file had a `Description:` header but no
+  free-form body and 2+ trailing blank lines, `lines[idx:]` was all empty
+  strings, so `desc` joined to `"\n"` (non-empty), the `Description:`-header
+  fallback was skipped, and `strings.TrimRight(desc, "\n")` returned `""` — so
+  `loadPyMetadata` emitted neither the body nor the `Description:` header (its
+  emit loop covers only Summary and Keywords), silently dropping a payload in
+  the `Description:` header: a false negative (0 findings instead of the
+  expected hits). After the fix the fallback is gated on the TRIMMED body
+  being empty (`strings.TrimSpace(desc) == ""`), so a whitespace-only body is
+  treated as absent and the `Description:` header value is used. Regression:
+  `TestPyMetadataDescriptionHeaderTrailingBlanks` (fails under v0.12.0).
+
+### Changed
+
+- Bumped VERSION `0.12.0` → `0.14.0`.
+
 ## [0.12.0] — 2026-08-10
 
 Extraction hardening + per-project config release. Two source-audit fixes

@@ -126,7 +126,26 @@ func findVendorPackageDirs(dir string) []string {
 				// lines are not package import paths.
 				continue
 			}
-			add(filepath.Join(dir, filepath.FromSlash(line)))
+			// Containment check: filepath.Join cleans ".." segments, so a
+			// crafted modules.txt line such as "../../external" (or an
+			// absolute path) resolves to a real directory OUTSIDE the vendor
+			// scan root and is then read by extractGoModule, leaking external
+			// prose into the report. For a supply-chain scanner whose threat
+			// model is untrusted dependency trees, a malicious vendored
+			// package shipping a crafted modules.txt must not escape the scan
+			// root. Resolve the joined path and skip the entry when it escapes
+			// dir (a lexical check on cleaned paths); legitimate import paths
+			// like "example.com/owner/pkg" stay within dir.
+			imp := filepath.FromSlash(line)
+			if filepath.IsAbs(imp) {
+				continue
+			}
+			resolved := filepath.Join(dir, imp)
+			rel, err := filepath.Rel(dir, resolved)
+			if err != nil || strings.HasPrefix(rel, "..") {
+				continue
+			}
+			add(resolved)
 		}
 		_ = f.Close()
 		if len(roots) > 0 {
@@ -436,6 +455,16 @@ func extractGoPackageComment(path string) []goCommentBlock {
 				}
 				flush()
 				inBlock = false
+				// After a block-comment closer, the remainder of the SAME
+				// physical line may carry the `package` clause (e.g.
+				// `*/ package foo`). The package check below only fires for
+				// lines whose trimmed form STARTS with "package ", so without
+				// re-checking the remainder here the scan runs past the real
+				// package clause and captures in-function comments as
+				// package-doc blocks. Re-check the remainder and halt.
+				if strings.HasPrefix(strings.TrimSpace(line[idx+2:]), "package ") {
+					return blocks
+				}
 				continue
 			}
 			body := strings.TrimSpace(line)
@@ -465,6 +494,14 @@ func extractGoPackageComment(path string) []goCommentBlock {
 				// line, whose handler does buf = nil (inBlock is false),
 				// silently discarding the whole comment body.
 				flush()
+				// Symmetric with the multi-line closer: the remainder of
+				// this line may carry the `package` clause (e.g.
+				// `/* license */ package foo`). Re-check it before
+				// continuing so the scan halts at the real package clause
+				// instead of capturing later in-function comments.
+				if strings.HasPrefix(strings.TrimSpace(rest[idx+2:]), "package ") {
+					return blocks
+				}
 				continue
 			}
 			body := strings.TrimSpace(rest)
