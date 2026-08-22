@@ -12,6 +12,38 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.15.0] — 2026-08-23
+
+Single-fix hardening release. No new detector rules, ecosystems, or CLI
+surface — one source-audit fix that closes a hang/DoS on the npm
+`package.json` label reader, applying the same non-regular/oversized guard
+the Python METADATA and npm prose paths already had.
+
+### Fixed
+
+- **`readPackageJSON` now guards against a non-regular / oversized
+  `package.json` (FIFO hang, `/dev/zero` OOM)**
+  (`internal/scan/node.go`, milestone
+  `fix-npm-package-json-unguarded-readfile`). `readPackageJSON` read the
+  manifest with a bare `os.ReadFile(path)` and no `os.Stat` / `IsRegular`
+  / size guard, unlike its sibling `loadPackageJSONProse` (immediately
+  below it in the same file) which already guarded. A malicious npm
+  package shipping `package.json` as a FIFO named pipe made the read
+  block forever on the open; a symlink to `/dev/zero` or an oversized
+  manifest grew the read buffer until OOM — a single package hanging or
+  crashing the whole scan and defeating the security tool. The same guard
+  (`os.Stat` → skip non-regular / >`maxProseBytes`) is now applied at the
+  top of `readPackageJSON`, returning `(nil, nil)` so `extractNodePackage`
+  falls back to the `nameHint` label (the caller is now nil-safe on the
+  skip path, matching the sibling's skip semantics). This is the same
+  hardening already applied to the Python (`loadPyMetadata`) and npm-prose
+  (`loadPackageJSONProse`) paths. Regression:
+  `TestReadPackageJSONNonRegularSkipped` (fails under v0.14.0).
+
+### Changed
+
+- Bumped VERSION `0.14.0` → `0.15.0`.
+
 ## [0.14.0] — 2026-08-19
 
 Grill bug-hunt release. Three source-audit fixes from a fresh bug-hunter

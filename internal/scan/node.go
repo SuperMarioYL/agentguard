@@ -105,7 +105,7 @@ func nestedNodeModules(pkgDir, root string, visited map[string]struct{}) ([]File
 // comments, embedded markdown elsewhere) are out of scope for v0.1.
 func extractNodePackage(pkgDir, root, nameHint string) []File {
 	label := nameHint
-	if pj, err := readPackageJSON(filepath.Join(pkgDir, "package.json")); err == nil {
+	if pj, err := readPackageJSON(filepath.Join(pkgDir, "package.json")); err == nil && pj != nil {
 		if pj.Name != "" {
 			label = pj.Name
 		}
@@ -156,6 +156,15 @@ type packageJSON struct {
 }
 
 func readPackageJSON(path string) (*packageJSON, error) {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxProseBytes {
+		// Skip missing / non-regular / oversized package.json so a malicious
+		// package shipping package.json as a FIFO (open blocks forever) or a
+		// /dev/zero symlink / oversized blob (buffer grows until OOM) cannot
+		// hang or crash a whole scan. extractNodePackage falls back to the
+		// nameHint label. Mirrors the guard loadPackageJSONProse already uses.
+		return nil, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
