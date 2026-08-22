@@ -115,14 +115,24 @@
     }
   },
   "meta": {
-    "source_version": "v0.12.0",
-    "content_version": 3,
-    "generated_at": "2026-08-05",
+    "source_version": "v0.15.0",
+    "content_version": 4,
+    "generated_at": "2026-08-23",
     "web_factory_ref": "v1.1"
   },
-  "content_version": "v0.13.0",
-  "generated_at": "2026-08-12T19:47:05Z",
+  "content_version": "v0.15.0",
+  "generated_at": "2026-08-23T02:50:00Z",
   "changelog": [
+    {
+      "version": "v0.15.0",
+      "zh": "readPackageJSON 现在对非常规文件（FIFO 命名管道）和超大 package.json 做防护——和 Python、npm-prose 路径一样的 stat + IsRegular + 大小上限，单个恶意包不再能挂死或 OOM 整次扫描。",
+      "en": "readPackageJSON now guards against non-regular files (FIFO named pipes) and oversized package.json — the same stat + IsRegular + size cap already used by the Python and npm-prose paths, so a single malicious package can no longer hang or OOM the whole scan."
+    },
+    {
+      "version": "v0.14.0",
+      "zh": "vendor/modules.txt 解析现会拦住 ../ 路径穿越（不再把扫描根之外的目录当发现报出）；修复 Go package-clause 与块结束符同行、Python metadata 描述头尾空行等解析边界。",
+      "en": "vendor/modules.txt parsing now blocks ../ path traversal (no longer reports directories outside the scan root as findings); fixes Go package-clause on the same line as a block closer, and Python metadata description header trailing-blank parsing edges."
+    },
     {
       "version": "v0.13.0",
       "zh": "扫描符号链接根目录不再静默丢弃整棵依赖树（walk 前先用 EvalSymlinks 解析根）。H002 启发式与语料 AG005 现在能匹配 \"if/when you're an AI\" 缩写——此前不可达的 '?re 死分支已修复。",
