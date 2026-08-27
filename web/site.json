@@ -115,14 +115,19 @@
     }
   },
   "meta": {
-    "source_version": "v0.15.0",
-    "content_version": 4,
-    "generated_at": "2026-08-23",
+    "source_version": "v0.16.0",
+    "content_version": 5,
+    "generated_at": "2026-08-28",
     "web_factory_ref": "v1.1"
   },
-  "content_version": "v0.15.0",
-  "generated_at": "2026-08-23T02:50:00Z",
+  "content_version": "v0.16.0",
+  "generated_at": "2026-08-28T02:22:00Z",
   "changelog": [
+    {
+      "version": "v0.16.0",
+      "zh": "「if/when you're an AI」缩写现在能匹配 Unicode 弯引号（U+2019，Markdown 编辑器 / HTML 渲染常见）——此前只认 ASCII 直引号，弯引号版本对 H002 启发式和 AG005 语料都是完全漏报。--ecosystem 打错字（如 nodee / rust）现在会直接报错退出，不再静默返回 0 命中、exit 0 放过一棵带 payload 的依赖树（与 v0.13.0 修 node→npm 别名同一类「最坏失败」）。",
+      "en": "The \"if/when you're an AI\" contraction now matches the Unicode curly apostrophe (U+2019, common from Markdown editors / HTML renderers) — previously only the ASCII straight quote was recognized, so the curly form was a complete false negative for both the H002 heuristic and the AG005 corpus rule. A typo'd --ecosystem (e.g. nodee / rust) now errors out instead of silently returning zero findings and exit 0 on a tree carrying real payloads (the same worst-failure-mode the v0.13.0 node→npm alias fix targeted)."
+    },
     {
       "version": "v0.15.0",
       "zh": "readPackageJSON 现在对非常规文件（FIFO 命名管道）和超大 package.json 做防护——和 Python、npm-prose 路径一样的 stat + IsRegular + 大小上限，单个恶意包不再能挂死或 OOM 整次扫描。",
