@@ -51,11 +51,17 @@ var destructiveVerbRE = regexp.MustCompile(`(?i)\b(delete|remove|wipe|nuke|drop|
 // heuristic, which additionally requires an imperative on the same line so
 // pure tagging ("this README is for the AI reader too") does not trip it.
 //
-// The verb group is `(\s+are|'re)` rather than `\s+(are|'?re)`: a
+// The verb group is `(\s+are|['\x{2019}]re)` rather than `\s+(are|'?re)`: a
 // contraction like "you're" has no space before the apostrophe, so the
 // old `'?re` alternative (behind a mandatory `\s+`) was unreachable dead
-// code — "If/When you're an AI" was a complete false negative.
-var conditionalAgentReaderRE = regexp.MustCompile(`(?i)\b(if|when)\s+you(\s+are|'re)\s+(an?\s+)?(ai|llm|language model|coding (assistant|agent)|assistant|chatbot|automated|claude|cursor|copilot|codex|agent)\b`)
+// code — "If/When you're an AI" was a complete false negative. The
+// apostrophe is a character class accepting BOTH the ASCII apostrophe
+// (U+0027) and the Unicode right single quote (U+2019): Markdown editors,
+// HTML renderers, and copy-paste flows commonly emit the curly apostrophe
+// in "If you're an AI", and a payload so rendered matched neither this
+// heuristic nor the AG005 corpus rule — a complete false negative on the
+// canonical conditional-agent-reader shape.
+var conditionalAgentReaderRE = regexp.MustCompile(`(?i)\b(if|when)\s+you(\s+are|['\x{2019}]re)\s+(an?\s+)?(ai|llm|language model|coding (assistant|agent)|assistant|chatbot|automated|claude|cursor|copilot|codex|agent)\b`)
 
 // softImperativeRE complements destructiveVerbRE with non-destructive
 // verbs an attacker would still ask the agent to perform conditionally —

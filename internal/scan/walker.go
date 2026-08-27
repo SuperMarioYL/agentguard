@@ -234,6 +234,26 @@ func Walk(opts Options) ([]File, error) {
 		return false
 	}
 
+	// Validate ecosystem tokens before walking.  normaliseEcosystemToken
+	// only maps the two documented aliases (node->npm, python->pypi) and
+	// passes every other token through unchanged, so a typo such as
+	// "nodee" or an unsupported "rust" stays as-is; wants() then returns
+	// false for every enumerator and, because Ecosystems is non-empty,
+	// the generic fallback below is skipped too — Walk returns an EMPTY
+	// file set with a nil error, ScanAll reports zero findings, and the
+	// CLI exits 0.  That is a silent gate-pass on a tree carrying real
+	// payloads, the same worst-failure-mode the node->npm alias map was
+	// added to prevent.  Fail loudly here instead: a token that does not
+	// normalise to a recognised ecosystem aborts the scan with exit 2.
+	// Empty Ecosystems (the "scan all" default) stays valid.
+	for _, e := range opts.Ecosystems {
+		switch normaliseEcosystemToken(e) {
+		case ecosystemNPM, ecosystemPyPI, ecosystemGo:
+		default:
+			return nil, fmt.Errorf("scan: unrecognised ecosystem %q (want node|python|go)", e)
+		}
+	}
+
 	var files []File
 
 	walkErr := filepath.WalkDir(rootAbs, func(path string, d fs.DirEntry, walkErr error) error {

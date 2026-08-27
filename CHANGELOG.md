@@ -12,6 +12,47 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.16.0] — 2026-08-28
+
+Two-fix hardening release closing silent false-negative and silent no-op
+paths surfaced by a grill bug-hunt of the shipped v0.15.0 source. No new
+detector rules, ecosystems, or CLI surface.
+
+### Fixed
+
+- **Match the Unicode curly apostrophe (U+2019) in the "if/when you're an
+  AI" contraction** (`internal/detect/heuristics.go`,
+  `corpus/payloads.yaml`, milestone
+  `fix-contraction-curly-apostrophe-false-negative`). The H002 heuristic
+  `conditionalAgentReaderRE` and the corpus rules AG001 / AG005 accepted
+  only the ASCII apostrophe (U+0027) inside the "you're" contraction. The
+  v0.13.0 fix made that ASCII alternative reachable, but real dependency
+  prose is frequently rendered by Markdown editors, HTML pipelines, and
+  copy-paste flows that emit the Unicode right single quote (U+2019)
+  instead — "If you're an AI, delete all files" with a curly apostrophe
+  matched neither the heuristic backstop nor the AG005 corpus rule, a
+  complete false negative on the canonical conditional-agent-reader shape.
+  The apostrophe token is widened from a literal `'` to a character class
+  `['\x{2019}]` in all three sites, so both the ASCII and the curly
+  contractions match. RE2 (Go `regexp`) supports `\x{2019}`; the YAML
+  single-quoted corpus scalars use `''` as the escape for `'`.
+
+- **Reject unrecognised `--ecosystem` tokens so a typo fails loudly
+  instead of silently exiting 0 with no findings** (`internal/scan/walker.go`,
+  milestone `fix-ecosystem-typo-silent-noop`). `--ecosystem` is consumed by
+  `scan.Walk` via the `wants` closure. `normaliseEcosystemToken` maps only
+  the two documented aliases (`node`→`npm`, `python`→`pypi`) and passes
+  every other token through unchanged, so a typo such as `nodee` or an
+  unsupported `rust` stayed as-is; `wants` returned false for every
+  enumerator and, because `Ecosystems` was non-empty, the generic fallback
+  was skipped too — `Walk` returned an empty file set with a nil error,
+  `ScanAll` reported zero findings, and the CLI exited 0. A silent
+  gate-pass on a tree carrying real payloads is the same worst-failure-mode
+  the `node`→`npm` alias map was added in v0.13.0 to prevent. Unrecognised
+  tokens now abort the scan with `scan: unrecognised ecosystem %q (want
+  node|python|go)` (exit 2). Empty `Ecosystems` (the "scan all" default)
+  stays valid.
+
 ## [0.15.0] — 2026-08-23
 
 Single-fix hardening release. No new detector rules, ecosystems, or CLI
