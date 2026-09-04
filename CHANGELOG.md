@@ -12,6 +12,81 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
 
+## [0.17.0] — 2026-09-05
+
+Four-milestone hardening release from a grill bug-hunt of the shipped
+v0.16.0 source. Every fix was proven by a fixture test that fails on the
+v0.16.0 tree before being shipped. No new detector rules, ecosystems, or
+CLI surface — three correctness/security fixes and one duplicate-finding
+quality improvement.
+
+### Fixed
+
+- **Guard the source/manifest readers against non-regular & oversized
+  files** (`internal/scan/python.go`, `internal/scan/gomod.go`, milestone
+  `fix-source-reader-unguarded-open-dos`). `extractPyDocstrings`,
+  `extractGoPackageComment`, `readModDirective`, and the
+  `vendor/modules.txt` reader all opened attacker-controlled `.py`/`.go`/
+  `go.mod`/`modules.txt` files with a bare `os.Open` and no
+  `os.Stat`/`IsRegular`/size guard. A package shipping `__init__.py` or
+  `doc.go` as a FIFO named pipe made `os.Open` block forever (POSIX: a
+  read-only open on a FIFO blocks until a writer opens it); a symlink to
+  `/dev/zero` spun the line scanner indefinitely. This is the exact DoS
+  class already hardened in `loadProseFile`, `readPackageJSON`,
+  `loadPackageJSONProse`, and `loadPyMetadata` (v0.14.0–v0.15.0) but the
+  four source/manifest readers were never given the guard. A FIFO
+  `__init__.py` now hangs no longer — verified by a 5s-timeout regression
+  test that hung the v0.16.0 tree. The scanner-based extractors keep the
+  v0.8.0 over-long-line tolerance (regular files larger than 1 MiB are
+  still read line-by-line); only non-regular files are skipped.
+
+- **Confine prose readers to the scan root** (`internal/scan/walker.go`,
+  `internal/scan/node.go`, `internal/scan/python.go`, `internal/scan/gomod.go`,
+  milestone `fix-prose-reader-symlink-escapes-scan-root`). `loadProseFile`
+  and the metadata prose readers `loadPackageJSONProse` and
+  `loadPyMetadata` (plus the source-extractor callers `loadPyDocstrings` /
+  `loadGoPackageDocs`) all `os.Stat` (which follows symlinks) then read the
+  path; none verified the resolved path stayed within the declared scan
+  root. A dependency that ships `README.md` / `package.json` / `METADATA` /
+  `__init__.py` / `doc.go` as a symlink to an arbitrary external file made
+  the scanner read that external prose and surface it under an in-tree
+  DisplayPath — the same trust-boundary leak the v0.14.0
+  `vendor/modules.txt` `..`-containment fix closed for vendor path
+  injection, but the prose readers were never contained. The readers now
+  `EvalSymlinks` the path and skip it when it resolves outside the scan
+  root, while legitimate in-tree symlinks (resolved path still within
+  root) keep working.
+
+- **Label nested `/v2` (and deeper) Go module-cache dirs from `go.mod`**
+  (`internal/scan/gomod.go`, milestone `fix-gomod-label-nested-v2-module`).
+  `goModuleLabel` reconstructed the `host/owner/repo@version` label from
+  exactly three parent path segments, which is correct only for a
+  three-segment import path. A nested module such as
+  `github.com/owner/repo/v2@v2.0.0` — the canonical Go `/v2` convention —
+  was labelled `owner/repo/v2@v2.0.0` (the owner mistaken for the host),
+  misattributing the package that smuggled a payload. The cache dir already
+  carries `go.mod` whose `module` directive is the authoritative path for
+  any segment count, so the `@version` branch now prefers
+  `readModDirective` and falls back to the 3-segment reconstruction only
+  when `go.mod` is absent. Distinct from the cosmetic vendored-basename
+  truncation rejected in the v0.16.0 grill: that truncated a label; this
+  misattributed the host.
+
+### Added
+
+- **Dedup identical README findings for Python packages**
+  (`internal/scan/python.go`, milestone
+  `dedup-py-identical-readme-findings`). `walkSitePackages` runs a metadata
+  pass over `.dist-info`/`.egg-info` dirs and a docstring pass over
+  importable package dirs, and both call `loadPyReadmeFromDir`. A package
+  that ships its README inside the dist-info (common — PEP 517 copies it
+  there) AND inside the importable package dir therefore yielded two
+  identical readme Files under different DisplayPaths, so the detector
+  reported the same payload finding twice. `walkSitePackages` now dedups
+  prose Files by `(Package, Kind, content hash)`, collapsing an identical
+  copied README to one File (one finding) while genuinely different
+  READMEs and distinct channels are both kept.
+
 ## [0.16.0] — 2026-08-28
 
 Two-fix hardening release closing silent false-negative and silent no-op

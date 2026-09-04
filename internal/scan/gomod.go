@@ -116,40 +116,47 @@ func findVendorPackageDirs(dir string) []string {
 	}
 
 	// Primary: parse vendor/modules.txt for the canonical package list.
-	if f, err := os.Open(filepath.Join(dir, "modules.txt")); err == nil {
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			if line == "" || strings.HasPrefix(line, "#") {
-				// '# <module> <version>' declarations and '## <annotation>'
-				// lines are not package import paths.
-				continue
+	mtPath := filepath.Join(dir, "modules.txt")
+	// Guard before opening: a non-regular/oversized modules.txt (a FIFO
+	// named pipe blocks os.Open forever; /dev/zero spins the scanner) must
+	// not be read wholesale — the same DoS class loadProseFile guards.
+	if regularBounded(mtPath) {
+		f, err := os.Open(mtPath)
+		if err == nil {
+			sc := bufio.NewScanner(f)
+			sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+			for sc.Scan() {
+				line := strings.TrimSpace(sc.Text())
+				if line == "" || strings.HasPrefix(line, "#") {
+					// '# <module> <version>' declarations and '## <annotation>'
+					// lines are not package import paths.
+					continue
+				}
+				// Containment check: filepath.Join cleans ".." segments, so a
+				// crafted modules.txt line such as "../../external" (or an
+				// absolute path) resolves to a real directory OUTSIDE the vendor
+				// scan root and is then read by extractGoModule, leaking external
+				// prose into the report. For a supply-chain scanner whose threat
+				// model is untrusted dependency trees, a malicious vendored
+				// package shipping a crafted modules.txt must not escape the scan
+				// root. Resolve the joined path and skip the entry when it escapes
+				// dir (a lexical check on cleaned paths); legitimate import paths
+				// like "example.com/owner/pkg" stay within dir.
+				imp := filepath.FromSlash(line)
+				if filepath.IsAbs(imp) {
+					continue
+				}
+				resolved := filepath.Join(dir, imp)
+				rel, err := filepath.Rel(dir, resolved)
+				if err != nil || strings.HasPrefix(rel, "..") {
+					continue
+				}
+				add(resolved)
 			}
-			// Containment check: filepath.Join cleans ".." segments, so a
-			// crafted modules.txt line such as "../../external" (or an
-			// absolute path) resolves to a real directory OUTSIDE the vendor
-			// scan root and is then read by extractGoModule, leaking external
-			// prose into the report. For a supply-chain scanner whose threat
-			// model is untrusted dependency trees, a malicious vendored
-			// package shipping a crafted modules.txt must not escape the scan
-			// root. Resolve the joined path and skip the entry when it escapes
-			// dir (a lexical check on cleaned paths); legitimate import paths
-			// like "example.com/owner/pkg" stay within dir.
-			imp := filepath.FromSlash(line)
-			if filepath.IsAbs(imp) {
-				continue
+			_ = f.Close()
+			if len(roots) > 0 {
+				return roots
 			}
-			resolved := filepath.Join(dir, imp)
-			rel, err := filepath.Rel(dir, resolved)
-			if err != nil || strings.HasPrefix(rel, "..") {
-				continue
-			}
-			add(resolved)
-		}
-		_ = f.Close()
-		if len(roots) > 0 {
-			return roots
 		}
 	}
 
@@ -207,13 +214,27 @@ func dirHasGoProse(dir string) bool {
 func goModuleLabel(modDir string) string {
 	base := filepath.Base(modDir)
 	if at := strings.LastIndex(base, "@"); at > 0 {
-		// Cache layout: github.com/owner/repo@v1.2.3 lives under
-		// .../repo@v1.2.3, so the parent chain has the prefix.
+		version := base[at+1:]
+		// Prefer the go.mod `module` directive — the authoritative
+		// module path for ANY import-path segment count — so a nested
+		// module such as github.com/owner/repo/v2@v2.0.0 is labelled
+		// with its real path. The parent-chain reconstruction below is
+		// only correct for a three-segment host/owner/repo@version;
+		// for a deeper path it takes filepath.Base of the wrong
+		// segment and misattributes the host (owner printed where
+		// github.com belongs), mislabelling the package that smuggled
+		// a payload. readModDirective is itself stat-guarded so the
+		// extra open is DoS-safe.
+		if name := readModDirective(filepath.Join(modDir, "go.mod")); name != "" {
+			return name + "@" + version
+		}
+		// Fallback: reconstruct host/owner/repo@version from the parent
+		// chain when go.mod is absent (stripped-vendor cache copy) or
+		// has no module directive.
 		parent := filepath.Dir(modDir)
 		owner := filepath.Base(parent)
 		host := filepath.Base(filepath.Dir(parent))
 		modName := base[:at]
-		version := base[at+1:]
 		if host != "." && owner != "." {
 			return fmt.Sprintf("%s/%s/%s@%s", host, owner, modName, version)
 		}
@@ -228,6 +249,13 @@ func goModuleLabel(modDir string) string {
 // readModDirective returns the module path from go.mod's `module` line,
 // or "" when the file is unreadable or does not start with one.
 func readModDirective(path string) string {
+	// Guard before opening: a non-regular/oversized go.mod (a FIFO named
+	// pipe blocks os.Open forever) must not be read — the same DoS class
+	// loadProseFile guards. A missing go.mod is the common stripped-vendor
+	// case and falls through to the caller's basename fallback.
+	if !regularBounded(path) {
+		return ""
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -317,6 +345,17 @@ func loadGoPackageDocs(modDir, root, label string) []File {
 			continue
 		}
 		gf := filepath.Join(modDir, name)
+		// Guard before opening: a non-regular .go (a FIFO named pipe
+		// blocks os.Open forever; /dev/zero spins the scanner) and a
+		// symlinked .go escaping the scan root must not be read. Unlike
+		// the wholesale prose readers, the source extractor reads
+		// line-by-line through a capped scanner and deliberately tolerates
+		// regular files larger than maxProseBytes (the over-long-line fix
+		// truncates each line and keeps scanning), so the guard is
+		// IsRegular + containment, not a size cap.
+		if !isRegularFile(gf) || !withinScanRoot(gf, root) {
+			continue
+		}
 		blocks := extractGoPackageComment(gf)
 		if len(blocks) == 0 {
 			continue

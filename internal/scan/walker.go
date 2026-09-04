@@ -186,6 +186,69 @@ func normaliseEcosystemToken(s string) string {
 // surface this scanner exists to catch — silently skip them.
 const maxProseBytes = 1 << 20
 
+// regularBounded reports whether path is a regular file no larger than
+// maxProseBytes.  It is the DoS guard shared by every dependency-tree
+// reader that did not previously stat before opening: a non-regular file
+// (a FIFO named pipe — open(O_RDONLY) blocks until a writer opens it; a
+// /dev/zero character device — the line scanner spins forever) or an
+// oversized regular file (buffer grows until OOM) must not be read
+// wholesale, or a single malicious package hangs or crashes the whole
+// scan — the exact class already hardened in loadProseFile,
+// readPackageJSON, loadPackageJSONProse, and loadPyMetadata.
+func regularBounded(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxProseBytes {
+		return false
+	}
+	return true
+}
+
+// isRegularFile reports whether path is a regular file (not a FIFO, device,
+// directory, or symlink to a non-regular target). It is the DoS guard for
+// the scanner-based readers (the .py/.go source extractors) that read
+// line-by-line through a capped bufio.Scanner rather than wholesale, so —
+// unlike the wholesale prose readers — they deliberately tolerate regular
+// files larger than maxProseBytes: the shared long-line-tolerant split
+// (NewSplitLongTolerant) truncates each physical line at MaxScanLineBytes
+// and keeps scanning, the v0.8.0 fix that keeps a payload docstring/comment
+// after a >1 MiB line reachable. A non-regular file is still fatal to them:
+// a FIFO blocks os.Open forever and a character device such as /dev/zero
+// spins the scanner indefinitely, so it is skipped before opening.
+func isRegularFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	return true
+}
+
+// withinScanRoot reports whether path resolves to a location inside root.
+// A dependency that ships README / package.json / METADATA / a .py or .go
+// source file as a symlink to an arbitrary external file makes the scanner
+// read that external file's prose and surface it under an in-tree
+// DisplayPath — the same trust-boundary leak the v0.14.0 vendor/modules.txt
+// `..`-containment fix closed for vendor path injection, but the prose
+// readers were never contained.  EvalSymlinks resolves the link chain; a
+// resolved path whose relative location escapes root (filepath.Rel returns
+// a ".." prefix) is rejected, while a legitimate in-tree symlink (resolved
+// path still within root) keeps working.  When EvalSymlinks itself fails
+// the file is accepted: os.Stat already validated it, and the common case
+// is a transient race rather than an escape.
+func withinScanRoot(path, root string) bool {
+	if root == "" {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return true
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..")
+}
+
 // Walk traverses opts.Root and returns every prose file it finds in any
 // recognised package channel.  Returned Files are sorted by (Package,
 // Kind, DisplayPath) so output is stable across runs.
@@ -390,6 +453,13 @@ func loadProseFile(path, root, pkg, ecosystem, kind string) (*File, error) {
 		return nil, nil
 	}
 	if info.Size() > maxProseBytes {
+		return nil, nil
+	}
+	// Confine symlinked prose to the declared scan root: a dependency
+	// that ships README/CHANGELOG as a symlink to an external file must
+	// not surface that external prose under an in-tree DisplayPath (the
+	// v0.14.0 vendor containment, generalised to every prose reader).
+	if !withinScanRoot(path, root) {
 		return nil, nil
 	}
 	data, err := os.ReadFile(path)

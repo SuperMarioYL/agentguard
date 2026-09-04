@@ -178,7 +178,32 @@ func walkSitePackages(siteDir, root string) ([]File, error) {
 		}
 		out = append(out, loadPyDocstrings(pkgDir, root, label)...)
 	}
+	out = dedupPyProse(out)
 	return out, nil
+}
+
+// dedupPyProse drops prose Files whose (Package, Kind, content hash) pair
+// duplicates a File already kept. A Python package that ships an identical
+// README inside both its .dist-info and its importable package dir (common —
+// PEP 517 copies the README into the dist-info) otherwise yields two readme
+// Files under different DisplayPaths, so the detector reports the same
+// payload finding twice. Genuinely different READMEs (different content) and
+// distinct channels (different Kind) are both kept. The metadata pass runs
+// first, so a dist-info README is preferred over a same-content package
+// README. No other ecosystem has this dual-README structure, so the dedup
+// is local to the Python enumerator.
+func dedupPyProse(files []File) []File {
+	seen := make(map[string]struct{}, len(files))
+	out := make([]File, 0, len(files))
+	for _, f := range files {
+		key := f.Package + "\x00" + f.Kind + "\x00" + hashContent(f.Content)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, f)
+	}
+	return out
 }
 
 // normalisePyName mirrors PEP 503 normalisation so "Flask-Login",
@@ -223,6 +248,14 @@ func loadPyMetadata(metaDir, root, label string) *File {
 		// non-regular files and files larger than maxProseBytes.
 		info, err := os.Stat(c)
 		if err != nil || !info.Mode().IsRegular() || info.Size() > maxProseBytes {
+			continue
+		}
+		// Confine symlinked METADATA/PKG-INFO to the scan root: a
+		// dependency that ships METADATA as a symlink to an external file
+		// must not surface that external Summary/Description/Keywords prose
+		// under an in-tree DisplayPath (the v0.14.0 containment, generalised
+		// to every prose reader).
+		if !withinScanRoot(c, root) {
 			continue
 		}
 		b, err := os.ReadFile(c)
@@ -418,6 +451,17 @@ func loadPyDocstrings(pkgDir, root, label string) []File {
 			continue
 		}
 		p := filepath.Join(pkgDir, e.Name())
+		// Guard before opening: a non-regular .py (a FIFO named pipe
+		// blocks os.Open forever; /dev/zero spins the scanner) and a
+		// symlinked .py escaping the scan root must not be read. Unlike
+		// the wholesale prose readers, the source extractor reads
+		// line-by-line through a capped scanner and deliberately tolerates
+		// regular files larger than maxProseBytes (the over-long-line fix
+		// truncates each line and keeps scanning), so the guard is
+		// IsRegular + containment, not a size cap.
+		if !isRegularFile(p) || !withinScanRoot(p, root) {
+			continue
+		}
 		docs := extractPyDocstrings(p)
 		if len(docs) == 0 {
 			continue

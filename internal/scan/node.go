@@ -193,6 +193,13 @@ func loadPackageJSONProse(path, root, label string) *File {
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maxProseBytes {
 		return nil
 	}
+	// Confine symlinked package.json to the scan root: a dependency that
+	// ships package.json as a symlink to an external file must not surface
+	// that external description/keywords prose under an in-tree DisplayPath
+	// (the v0.14.0 vendor containment, generalised to every prose reader).
+	if !withinScanRoot(path, root) {
+		return nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
