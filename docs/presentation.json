@@ -1,0 +1,82 @@
+{
+  "name": "agentguard",
+  "tagline": "Inspect instructions hidden in dependency prose.",
+  "architecture": {
+    "title": "Dependency prose to reviewable findings",
+    "nodes": [
+      {
+        "title": "Ecosystem walkers",
+        "detail": "npm / Python / Go"
+      },
+      {
+        "title": "Prose extraction",
+        "detail": "Docs / docstrings / metadata"
+      },
+      {
+        "title": "Rules and overrides",
+        "detail": "Corpus / heuristics / config"
+      },
+      {
+        "title": "Reports and baseline",
+        "detail": "Text / SARIF / file hashes"
+      }
+    ],
+    "edges": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        2
+      ],
+      [
+        2,
+        3
+      ]
+    ]
+  },
+  "process": {
+    "title": "Scan the shipped dependency fixtures",
+    "steps": [
+      {
+        "title": "Read npm fixture",
+        "detail": "jqwik README text"
+      },
+      {
+        "title": "Match patterns",
+        "detail": "3 high / 1 medium"
+      },
+      {
+        "title": "Scan Go fixture",
+        "detail": "No findings"
+      }
+    ],
+    "result": "The fixture results are reproducible; they do not establish universal detection accuracy."
+  },
+  "integrations": {
+    "title": "Supported scan and report routes",
+    "items": [
+      {
+        "title": "npm dependencies",
+        "detail": "README / metadata"
+      },
+      {
+        "title": "Python packages",
+        "detail": "README / docstrings"
+      },
+      {
+        "title": "Go modules",
+        "detail": "README / package docs"
+      },
+      {
+        "title": "SARIF 2.1.0",
+        "detail": "Machine-readable findings"
+      },
+      {
+        "title": "Hash baseline",
+        "detail": "Changed-content scans"
+      }
+    ]
+  }
+}
