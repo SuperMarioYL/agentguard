@@ -260,5 +260,6 @@
   ],
   "footer": {
     "tag": "0.17.0 · Go 1.24+ · Apache-2.0"
-  }
+  },
+  "content_version": "v0.17.0"
 }
