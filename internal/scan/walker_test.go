@@ -158,20 +158,20 @@ func TestWalkEcosystemFilter(t *testing.T) {
 }
 
 // TestWalkRejectsUnknownEcosystem guards fix-ecosystem-typo-silent-noop:
-// a typo'd or unsupported --ecosystem token (e.g. "nodee", "rust") must
+// a typo'd or unsupported --ecosystem token (e.g. "nodee", "goland") must
 // fail loudly instead of silently returning zero files + nil error, which
 // used to make the CLI exit 0 with "no findings" on a tree carrying real
 // payloads — the worst failure mode for a security tool. The recognised
-// spellings node|python|go (and their internal aliases) still scan.
+// spellings node|python|go|cargo (and their internal aliases) still scan.
 func TestWalkRejectsUnknownEcosystem(t *testing.T) {
 	root := testdataPath(t, "node_modules_fixture")
-	for _, bad := range []string{"nodee", "rust", "go-mod"} {
+	for _, bad := range []string{"nodee", "goland", "go-mod"} {
 		if _, err := Walk(Options{Root: root, Ecosystems: []string{bad}}); err == nil {
 			t.Errorf("Walk(Ecosystems=[%q]) = nil err; want a non-nil error rejecting the unrecognised token", bad)
 		}
 	}
 	// Recognised spellings (including aliases) must still succeed.
-	for _, ok := range []string{"node", "python", "go", "npm", "pypi"} {
+	for _, ok := range []string{"node", "python", "go", "cargo", "rust", "npm", "pypi"} {
 		if _, err := Walk(Options{Root: root, Ecosystems: []string{ok}}); err != nil {
 			t.Errorf("Walk(Ecosystems=[%q]) = err %v; want nil (recognised token)", ok, err)
 		}

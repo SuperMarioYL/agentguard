@@ -23,10 +23,10 @@ Agents read dependency documentation as context. Alongside code checks, reviewer
   <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="assets/presentation/architecture-mobile-dark.svg">
   <source media="(max-width: 640px)" srcset="assets/presentation/architecture-mobile-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/presentation/architecture-dark.svg">
-  <img src="assets/presentation/architecture-light.svg" width="1000" alt="The walker discovers npm, Python and Go dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content.">
+  <img src="assets/presentation/architecture-light.svg" width="1000" alt="The walker discovers npm, Python, Go and Cargo (Rust) dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content.">
 </picture>
 
-The walker discovers npm, Python and Go dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content.
+The walker discovers npm, Python, Go and Cargo (Rust) dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content.
 
 Source entry points: [cmd/agentguard/main.go](cmd/agentguard/main.go) · [internal/scan/walker.go](internal/scan/walker.go) · [internal/scan/python.go](internal/scan/python.go) · [internal/scan/gomod.go](internal/scan/gomod.go) · [internal/detect/patterns.go](internal/detect/patterns.go) · [internal/config/config.go](internal/config/config.go)
 
@@ -60,7 +60,7 @@ Complete inputs and execution steps are included in the commands above and the [
 ./bin/agentguard check . --write-baseline baseline.json
 ./bin/agentguard check . --changed-only baseline.json --write-baseline baseline.json
 ```
-The default `--severity medium` sets both the display floor and CI threshold. Findings exit 1 and command errors exit 2; `--exit-on-finding=false` enables report-only mode. `--ecosystem node,python,go` restricts ecosystem scanning.
+The default `--severity medium` sets both the display floor and CI threshold. Findings exit 1 and command errors exit 2; `--exit-on-finding=false` enables report-only mode. `--ecosystem node,python,go,cargo` restricts ecosystem scanning (`rust` aliases `cargo`).
 
 ## Recorded demo
 
@@ -144,7 +144,7 @@ severity: {}
 
 ## Roadmap and scope
 
-Current capabilities include three ecosystems, SARIF, baselines and project rule controls. Additional ecosystems, an Action wrapper and team distribution require separate implementation. Local scans do not rewrite dependency prose.
+Current capabilities include four ecosystems (npm / PyPI / Go / Cargo — v0.18 adds the Cargo registry and cargo vendor walkers), SARIF, baselines and project rule controls. RubyGems, an Action wrapper and team distribution require separate implementation. Local scans do not rewrite dependency prose.
 
 - Heuristic findings require review. A clean scan does not establish package safety or replace vulnerability and execution analysis.
 - The example exercises shipped fixtures; it does not measure large-scale scan time or false-positive rates.

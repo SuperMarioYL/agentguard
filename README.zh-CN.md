@@ -60,7 +60,7 @@ go build -o bin/agentguard ./cmd/agentguard
 ./bin/agentguard check . --write-baseline baseline.json
 ./bin/agentguard check . --changed-only baseline.json --write-baseline baseline.json
 ```
-默认 `--severity medium` 同时决定展示下限与 CI 失败阈值。正常命中导致退出 1，命令错误退出 2；`--exit-on-finding=false` 只报告。`--ecosystem node,python,go` 限定扫描生态。
+默认 `--severity medium` 同时决定展示下限与 CI 失败阈值。正常命中导致退出 1，命令错误退出 2；`--exit-on-finding=false` 只报告。`--ecosystem node,python,go,cargo` 限定扫描生态（`rust` 为 `cargo` 别名）。
 
 ## 实际 Demo
 
@@ -125,10 +125,10 @@ last updated:   2026-06-22
   <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="assets/presentation/integrations-mobile-dark.svg">
   <source media="(max-width: 640px)" srcset="assets/presentation/integrations-mobile-light.svg">
   <source media="(prefers-color-scheme: dark)" srcset="assets/presentation/integrations-dark.svg">
-  <img src="assets/presentation/integrations-light.svg" width="1000" alt="扫描范围包括 node_modules、Python 环境、vendor 与 Go 模块缓存，并有通用文档扫描。SARIF 输出可供支持该格式的查看器与 CI 消费；不需要外部模型或 API key。">
+  <img src="assets/presentation/integrations-light.svg" width="1000" alt="扫描范围包括 node_modules、Python 环境、vendor 与 Go 模块缓存、Cargo 注册表与 cargo vendor 输出，并有通用文档扫描。SARIF 输出可供支持该格式的查看器与 CI 消费；不需要外部模型或 API key。">
 </picture>
 
-扫描范围包括 node_modules、Python 环境、vendor 与 Go 模块缓存，并有通用文档扫描。SARIF 输出可供支持该格式的查看器与 CI 消费；不需要外部模型或 API key。
+扫描范围包括 node_modules、Python 环境、vendor 与 Go 模块缓存、Cargo 注册表与 cargo vendor 输出，并有通用文档扫描。SARIF 输出可供支持该格式的查看器与 CI 消费；不需要外部模型或 API key。
 
 
 
@@ -144,7 +144,7 @@ severity: {}
 
 ## 路线图与范围
 
-当前支持三类生态、SARIF、基线与项目规则配置。更多生态、Action 包装和团队分发仍需独立实现；本地扫描不自动改写依赖文本。
+当前支持四类生态（npm / PyPI / Go / Cargo）、SARIF、基线与项目规则配置——v0.18 新增 Cargo 注册表与 cargo vendor 走扫。RubyGems、Action 包装和团队分发仍需独立实现；本地扫描不自动改写依赖文本。
 
 - 启发式命中需要人工判断；无发现不代表依赖安全，也不替代漏洞或执行行为分析。
 - 本示例只验证自带 fixture，未复现大规模扫描耗时或误报率。

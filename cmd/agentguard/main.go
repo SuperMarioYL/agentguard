@@ -98,7 +98,7 @@ func newCheckCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.noColor, "no-color", false,
 		"disable ANSI colors in text output")
 	cmd.Flags().StringSliceVar(&opts.ecosystems, "ecosystem", nil,
-		"restrict scan to these ecosystems: node | python | go (default: all detected)")
+		"restrict scan to these ecosystems: node | python | go | cargo (default: all detected)")
 	cmd.Flags().BoolVar(&opts.exitOnFinding, "exit-on-finding", opts.exitOnFinding,
 		"exit non-zero when any finding ≥ --severity is reported (CI mode)")
 

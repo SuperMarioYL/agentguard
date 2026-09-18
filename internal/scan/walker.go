@@ -159,6 +159,7 @@ const (
 	ecosystemNPM     = "npm"
 	ecosystemPyPI    = "pypi"
 	ecosystemGo      = "go"
+	ecosystemCargo   = "cargo"
 	ecosystemGeneric = "generic"
 )
 
@@ -177,6 +178,8 @@ func normaliseEcosystemToken(s string) string {
 		return ecosystemNPM
 	case "python":
 		return ecosystemPyPI
+	case "rust":
+		return ecosystemCargo
 	}
 	return s
 }
@@ -311,9 +314,9 @@ func Walk(opts Options) ([]File, error) {
 	// Empty Ecosystems (the "scan all" default) stays valid.
 	for _, e := range opts.Ecosystems {
 		switch normaliseEcosystemToken(e) {
-		case ecosystemNPM, ecosystemPyPI, ecosystemGo:
+		case ecosystemNPM, ecosystemPyPI, ecosystemGo, ecosystemCargo:
 		default:
-			return nil, fmt.Errorf("scan: unrecognised ecosystem %q (want node|python|go)", e)
+			return nil, fmt.Errorf("scan: unrecognised ecosystem %q (want node|python|go|cargo)", e)
 		}
 	}
 
@@ -354,10 +357,29 @@ func Walk(opts Options) ([]File, error) {
 				}
 			}
 			return filepath.SkipDir
+		case "registry":
+			// ~/.cargo/registry: src/<index>/<crate>-<version>/ crate
+			// trees. Sniffed (src child with Cargo.toml-bearing crates)
+			// so an unrelated "registry" directory is never mis-walked.
+			if wants(ecosystemCargo) && cargoRegistryTree(path) {
+				if c, err := walkCargoRegistry(path, rootAbs); err == nil {
+					files = append(files, c...)
+				}
+				return filepath.SkipDir
+			}
 		case "vendor", "mod":
-			// `vendor` is the in-repo Go vendor tree; `mod` catches
-			// $GOPATH/pkg/mod / ~/go/pkg/mod entry points when the user
-			// scans the cache directly.
+			// `vendor` is ambiguous between a Go vendor tree and a
+			// `cargo vendor` tree; the discriminator is a Cargo.toml in
+			// a first-level crate directory (go mod vendor strips
+			// go.mod, cargo vendor always keeps Cargo.toml). `mod`
+			// catches $GOPATH/pkg/mod / ~/go/pkg/mod entry points when
+			// the user scans the cache directly.
+			if d.Name() == "vendor" && wants(ecosystemCargo) && cargoVendorTree(path) {
+				if c, err := walkCargoVendor(path, rootAbs); err == nil {
+					files = append(files, c...)
+				}
+				return filepath.SkipDir
+			}
 			if wants(ecosystemGo) {
 				if g, err := walkGoModuleCache(path, rootAbs); err == nil {
 					files = append(files, g...)

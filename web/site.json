@@ -10,9 +10,9 @@
   },
   "meta": {
     "visual_profile": "neon-particle",
-    "content_version": "0.17.0",
+    "content_version": "0.18.0",
     "demo_source": "docs/demo-results.json",
-    "source_version": "v0.17.0"
+    "source_version": "v0.18.0"
   },
   "hero": {
     "eyebrow": {
@@ -118,15 +118,15 @@
           "en": "How it works"
         },
         "body": {
-          "zh": "walker 按生态发现 npm、Python 和 Go 依赖，提取文档、源文件中的文档片段及包元数据；detector 使用规则语料与邻近启发式，应用项目规则覆盖后交给 text/SARIF reporter。基线保存全文集合的哈希，增量扫描只检查内容变化。",
-          "en": "The walker discovers npm, Python and Go dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content."
+          "zh": "walker 按生态发现 npm、Python、Go 和 Cargo（Rust）依赖，提取文档、源文件中的文档片段及包元数据；detector 使用规则语料与邻近启发式，应用项目规则覆盖后交给 text/SARIF reporter。基线保存全文集合的哈希，增量扫描只检查内容变化。",
+          "en": "The walker discovers npm, Python, Go and Cargo (Rust) dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content."
         },
         "image": {
           "light": "/assets/presentation/architecture-light.svg",
           "dark": "/assets/presentation/architecture-dark.svg",
           "alt": {
-            "zh": "walker 按生态发现 npm、Python 和 Go 依赖，提取文档、源文件中的文档片段及包元数据；detector 使用规则语料与邻近启发式，应用项目规则覆盖后交给 text/SARIF reporter。基线保存全文集合的哈希，增量扫描只检查内容变化。",
-            "en": "The walker discovers npm, Python and Go dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content."
+            "zh": "walker 按生态发现 npm、Python、Go 和 Cargo（Rust）依赖，提取文档、源文件中的文档片段及包元数据；detector 使用规则语料与邻近启发式，应用项目规则覆盖后交给 text/SARIF reporter。基线保存全文集合的哈希，增量扫描只检查内容变化。",
+            "en": "The walker discovers npm, Python, Go and Cargo (Rust) dependencies and extracts documents, source-file documentation and package metadata. The detector applies corpus rules and proximity heuristics, then project overrides, before text or SARIF reporting. Baselines retain hashes of the full file set while incremental scans inspect changed content."
           },
           "mobile": {
             "light": "/assets/presentation/architecture-mobile-light.svg",
@@ -272,10 +272,15 @@
     }
   ],
   "footer": {
-    "tag": "0.17.0 · Go 1.24+ · Apache-2.0"
+    "tag": "0.18.0 · Go 1.24+ · Apache-2.0"
   },
-  "content_version": "v0.17.0",
+  "content_version": "v0.18.0",
   "changelog": [
+    {
+      "version": "v0.18.0",
+      "zh": "新增 Cargo 生态走扫：~/.cargo/registry/src/<index>/<crate>-<version>/ 注册表与 cargo vendor 输出树（vendor 按 Cargo.toml 判别，不再被 Go 枚举器吞掉），每个 crate 贡献 README / CHANGELOG / Cargo.toml [package] description+keywords 三条 prose 通道，finding 定位到真实 manifest 行号；--ecosystem cargo（别名 rust）。",
+      "en": "New Cargo ecosystem walker: the ~/.cargo/registry/src/<index>/<crate>-<version>/ registry and cargo vendor output trees (vendor claimed by Cargo.toml presence instead of falling to the Go enumerator); each crate contributes README / CHANGELOG / Cargo.toml [package] description+keywords prose with findings mapped to real manifest lines; --ecosystem cargo (alias rust)."
+    },
     {
       "version": "v0.17.0",
       "zh": "源码/清单读取器（docstring、Go 包注释、go.mod、modules.txt）现在对非常规文件做防护，单个恶意包用 FIFO 命名管道不再能挂死扫描；README/package.json/METADATA/源码是符号链接指向扫描根之外时不再被读取（v0.14.0 的 vendor 限制扩展到全部 prose 读取器）；嵌套 /v2 Go 模块缓存目录的标签不再错认 host；Python 包在 dist-info 与包目录里放同一份 README 不再重复报同一条发现。",

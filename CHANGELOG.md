@@ -7,10 +7,42 @@ Dates are ISO 8601 (`YYYY-MM-DD`).
 
 ### Planned (future)
 
-- Cargo and RubyGems ecosystem walkers.
+- RubyGems ecosystem walker.
 - `action.yml` GitHub Action wrapper so `agentguard` runs natively in workflows.
 - Hosted team policy server (central corpus updates + per-org allowlists).
 - SARIF → Jira pipe for security teams that triage outside GitHub Advanced Security.
+
+## [0.18.0] — 2026-09-19
+
+One-feature release: the Cargo ecosystem walker — the first item on the
+public roadmap — plus the token/validation surface that comes with it. No
+detector-rule or output-format changes; the corpus and heuristics apply to
+Cargo prose exactly as they do to npm/PyPI/Go.
+
+### Added
+
+- **Cargo ecosystem walker** (`internal/scan/cargo.go`, milestone
+  `cargo-ecosystem-walker`). Covers both places Rust dependency prose
+  lives: the local registry (`~/.cargo/registry/src/<index>/<crate>-<version>/`,
+  dispatched by a sniffed `registry` directory — an unrelated directory
+  named "registry" is never mis-walked) and `cargo vendor` output
+  (`vendor/<crate>/`, claimed when a first-level crate directory carries a
+  Cargo.toml — the discriminator against a Go vendor tree, which `go mod
+  vendor` strips of go.mod; previously a cargo-vendored tree fell through
+  to the Go enumerator and its crates went unlabelled and unscanned for
+  manifest prose). Each crate contributes the same three prose channels as
+  every other ecosystem: README, CHANGELOG, and the `Cargo.toml` `[package]`
+  description + keywords — the manifest reader is a line scanner bounded to
+  the `[package]` section (a `description` shadowed under `[dependencies]`
+  is provably ignored, regression-tested), stat/size-guarded like every
+  other manifest reader, and findings map to the real manifest source line.
+  Labels are `crate@version` from the manifest, falling back to the
+  registry directory name. `--ecosystem cargo` (alias `rust`) restricts the
+  scan; the typo-rejection guard now knows both spellings, and a cargo-only
+  tree under `--ecosystem go` still yields zero files per the
+  `--ecosystem` contract. 5 new tests in `internal/scan/cargo_test.go`;
+  `TestWalkRejectsUnknownEcosystem` updated because `rust` is now a
+  recognised alias rather than a rejection case.
 
 ## [0.17.0] — 2026-09-05
 
